@@ -43,11 +43,11 @@ impl<T: Copy> From<std::ops::RangeInclusive<T>> for Interval<T> {
     }
 }
 
-impl<T: Copy> From<&std::ops::RangeInclusive<T>> for Interval<T> {
+impl<T: Clone> From<&std::ops::RangeInclusive<T>> for Interval<T> {
     fn from(range: &std::ops::RangeInclusive<T>) -> Self {
         Self {
-            low: *range.start(),
-            high: *range.end(),
+            low: range.start().clone(),
+            high: range.end().clone(),
         }
     }
 }

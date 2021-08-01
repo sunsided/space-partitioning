@@ -7,6 +7,7 @@ pub use inorder_iterator::InorderIterator;
 pub use interval::Interval;
 
 use std::fmt::{Debug, Formatter};
+use std::ops::RangeInclusive;
 
 /// A child node in the tree.
 pub type ChildNode<T> = Option<Box<Node<T>>>;
@@ -17,6 +18,20 @@ pub struct Node<T> {
     max: T,
     left: ChildNode<T>,
     right: ChildNode<T>,
+}
+
+impl<T, const N: usize> From<[RangeInclusive<T>; N]> for Node<T>
+where
+    T: Clone + PartialOrd,
+{
+    fn from(intervals: [RangeInclusive<T>; N]) -> Self {
+        let first_interval = Interval::from(&intervals[0]);
+        let mut root = Node::new(first_interval);
+        for range in intervals.iter().skip(1) {
+            root.insert(Interval::from(range));
+        }
+        root
+    }
 }
 
 impl<T: Debug> Debug for Node<T> {
@@ -37,6 +52,7 @@ impl<T: Clone> Node<T> {
         }
     }
 
+    /// Gets the size of the tree, i.e., the number of intervals stored.
     pub fn len(&self) -> usize {
         let mut size = 1;
         if let Some(left) = &self.left {
@@ -116,6 +132,7 @@ impl<T: Clone + PartialOrd<T>> Node<T> {
         None
     }
 
+    /// Iterates the tree in-order, i.e. earlier-starting intervals first.
     pub fn iter_inorder(&self) -> InorderIterator<T> {
         InorderIterator::new(&self)
     }
@@ -127,12 +144,7 @@ pub(self) mod test {
 
     /// Constructs a test tree.
     pub fn construct_test_tree() -> Node<i32> {
-        let intervals = [15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40];
-        let mut root = Node::new((&intervals[0]).into());
-        for interval in intervals.iter().skip(1) {
-            root.insert(interval.into());
-        }
-        root
+        Node::from([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
     }
 
     #[test]

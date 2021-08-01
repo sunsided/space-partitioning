@@ -1,4 +1,4 @@
-use crate::interval_tree::Node;
+use crate::interval_tree::{ChildNode, Node};
 
 #[derive(Debug)]
 enum State<'a, T> {
@@ -77,6 +77,49 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
         let size = self.root.len();
         return (size, Some(size));
     }
+
+    fn count(self) -> usize
+    where
+        Self: Sized,
+    {
+        self.root.len()
+    }
+
+    fn last(self) -> Option<Self::Item> {
+        let mut token = self.root;
+        while token.right.is_some() {
+            token = token.right.as_ref().unwrap();
+        }
+
+        Some(token)
+    }
+
+    fn for_each<F>(self, mut f: F)
+    where
+        F: FnMut(Self::Item),
+    {
+        fn inorder<'a, T, F>(node: &'a Node<T>, f: &mut F)
+        where
+            F: FnMut(&'a Node<T>),
+        {
+            inorder_child(&node.left, f);
+            (*f)(node);
+            inorder_child(&node.right, f);
+        }
+
+        fn inorder_child<'a, T, F>(node: &'a ChildNode<T>, f: &mut F)
+        where
+            F: FnMut(&'a Node<T>),
+        {
+            if node.is_none() {
+                return;
+            }
+
+            inorder(&node.as_ref().unwrap(), f);
+        }
+
+        inorder(self.root, &mut f);
+    }
 }
 
 #[cfg(test)]
@@ -90,6 +133,23 @@ mod test {
         let (min, max) = root.iter_inorder().size_hint();
         assert_eq!(min, 6);
         assert_eq!(max, Some(6));
+    }
+
+    #[test]
+    fn count_works() {
+        let root = construct_test_tree();
+        let count = root.iter_inorder().count();
+        assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn last_works() {
+        let root = construct_test_tree();
+        let last = root.iter_inorder().last();
+        assert!(last.is_some());
+        let last = last.unwrap();
+        assert_eq!(last.interval.low, 30);
+        assert_eq!(last.interval.high, 40);
     }
 
     #[test]
@@ -110,6 +170,25 @@ mod test {
             let expected_node = expected.pop();
             assert!(expected_node.is_some());
             assert_eq!(expected_node.unwrap().interval, node.interval);
+        }
+    }
+
+    #[test]
+    fn for_each_works() {
+        let root = construct_test_tree();
+
+        // Collect the expected nodes.
+        let mut expected = Vec::default();
+        collect_inorder(&root, &mut expected);
+
+        // Act
+        let mut collected = Vec::default();
+        root.iter_inorder().for_each(|node| collected.push(node));
+
+        // Assert
+        assert_eq!(expected.len(), collected.len());
+        for (expected_node, node) in expected.into_iter().zip(collected) {
+            assert_eq!(expected_node.interval, node.interval);
         }
     }
 
