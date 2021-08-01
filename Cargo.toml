@@ -17,3 +17,4 @@ name = "interval_tree"
 path = "examples/interval_tree.rs"
 
 [dependencies]
+num-traits = "0.2.14"
