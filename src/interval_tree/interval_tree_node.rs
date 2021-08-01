@@ -14,6 +14,32 @@ where
     pub(crate) right: ChildNode<T, D>,
 }
 
+/// Wrapper to help with `FromIterator<T>` implementations
+/// that may have to deal with empty sequences.
+#[derive(Debug)]
+pub(crate) enum IntervalTreeNodeOption<T, D>
+where
+    T: IntervalType,
+{
+    None,
+    Some(IntervalTreeNode<T, D>),
+}
+
+impl<T, D> IntervalTreeNodeOption<T, D>
+where
+    T: IntervalType,
+{
+    /// Unwraps the value of this option if it exists or panics
+    /// if it was `None`.
+    #[allow(dead_code)]
+    fn unwrap(self) -> IntervalTreeNode<T, D> {
+        match self {
+            Self::Some(value) => value,
+            Self::None => panic!(),
+        }
+    }
+}
+
 impl<T, D> IntervalTreeNode<T, D>
 where
     T: IntervalType,
@@ -130,7 +156,7 @@ where
     }
 }
 
-impl<I, T, D> std::iter::FromIterator<I> for IntervalTreeNode<T, D>
+impl<I, T, D> std::iter::FromIterator<I> for IntervalTreeNodeOption<T, D>
 where
     I: Into<IntervalTreeEntry<T, D>>,
     T: IntervalType,
@@ -151,8 +177,11 @@ where
             }
         }
 
-        debug_assert!(root.is_some());
-        root.unwrap()
+        if root.is_some() {
+            IntervalTreeNodeOption::Some(root.unwrap())
+        } else {
+            IntervalTreeNodeOption::None
+        }
     }
 }
 
@@ -172,7 +201,8 @@ pub(crate) mod test {
 
     /// Constructs a test tree.
     pub fn construct_test_root_node() -> IntervalTreeNode<i32, ()> {
-        IntervalTreeNode::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
+        IntervalTreeNodeOption::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
+            .unwrap()
     }
 
     #[test]

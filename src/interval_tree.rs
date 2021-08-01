@@ -10,10 +10,9 @@ pub use inorder_iterator::InorderIterator;
 pub use interval::{Interval, IntervalType};
 pub use interval_tree_entry::IntervalTreeEntry;
 
-use crate::interval_tree::interval_tree_node::IntervalTreeNode;
+use crate::interval_tree::interval_tree_node::{IntervalTreeNode, IntervalTreeNodeOption};
 use std::fmt::{Debug, Formatter};
 
-#[derive(Default)]
 pub struct IntervalTree<T, D>
 where
     T: IntervalType,
@@ -21,14 +20,47 @@ where
     root: Option<IntervalTreeNode<T, D>>,
 }
 
+impl<T, D> Default for IntervalTree<T, D>
+where
+    T: IntervalType,
+{
+    fn default() -> Self {
+        Self { root: None }
+    }
+}
+
 impl<T, D> IntervalTree<T, D>
 where
     T: IntervalType,
 {
-    fn new(root: IntervalTreeNode<T, D>) -> Self {
+    pub fn new_from_entry<I>(entry: I) -> Self
+    where
+        I: Into<IntervalTreeEntry<T, D>>,
+    {
+        Self {
+            root: Some(IntervalTreeNode::new(entry.into())),
+        }
+    }
+
+    fn new_from_node(root: IntervalTreeNode<T, D>) -> Self {
         Self { root: Some(root) }
     }
 
+    /// A utility function to insert a new Interval Search Tree Node
+    pub fn insert<I>(&mut self, entry: I) -> &Self
+    where
+        I: Into<IntervalTreeEntry<T, D>>,
+    {
+        let node = IntervalTreeNode::new(entry.into());
+        if self.root.is_none() {
+            self.root = Some(node);
+        } else {
+            self.root.as_mut().unwrap().insert(node);
+        }
+        self
+    }
+
+    /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
         return if let Some(node) = &self.root {
             node.len()
@@ -71,7 +103,7 @@ where
     T: IntervalType,
 {
     fn from(interval: Interval<T>) -> Self {
-        Self::new(IntervalTreeNode::new_from_pair(interval, ()))
+        Self::new_from_node(IntervalTreeNode::new_from_pair(interval, ()))
     }
 }
 
@@ -80,7 +112,7 @@ where
     T: IntervalType,
 {
     fn from(value: (Interval<T>, D)) -> Self {
-        Self::new(IntervalTreeNode::new_from_pair(value.0, value.1))
+        Self::new_from_node(IntervalTreeNode::new_from_pair(value.0, value.1))
     }
 }
 
@@ -93,7 +125,10 @@ where
     where
         Iter: IntoIterator<Item = I>,
     {
-        IntervalTree::new(IntervalTreeNode::from_iter(iter))
+        match IntervalTreeNodeOption::from_iter(iter) {
+            IntervalTreeNodeOption::Some(node) => IntervalTree::new_from_node(node),
+            IntervalTreeNodeOption::None => IntervalTree::default(),
+        }
     }
 }
 
@@ -101,6 +136,28 @@ where
 mod test {
     use super::*;
     use std::iter::FromIterator;
+
+    mod construction {
+        use super::*;
+
+        #[test]
+        fn insert_only_works() {
+            let mut tree = IntervalTree::default();
+            assert_eq!(tree.len(), 0);
+            tree.insert((15..=20, 4.2));
+            assert_eq!(tree.len(), 1);
+            tree.insert((10..=30, 13.37));
+            assert_eq!(tree.len(), 2);
+        }
+
+        #[test]
+        fn from_constructor_works() {
+            let mut tree = IntervalTree::new_from_entry(15..=20);
+            assert_eq!(tree.len(), 1);
+            tree.insert(15..=20);
+            assert_eq!(tree.len(), 2);
+        }
+    }
 
     mod from_iter {
         use super::*;
