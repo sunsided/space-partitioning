@@ -1,6 +1,6 @@
-///! According to Wikipedia:
-///! > An interval tree is a tree data structure to hold intervals.
-///! > Specifically, it allows one to efficiently find all intervals that overlap with any given interval or point.
+//! According to Wikipedia:
+//! > An interval tree is a tree data structure to hold intervals.
+//! > Specifically, it allows one to efficiently find all intervals that overlap with any given interval or point.
 mod inorder_iterator;
 mod interval;
 mod interval_tree_entry;

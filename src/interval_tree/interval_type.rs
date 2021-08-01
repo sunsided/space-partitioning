@@ -1,4 +1,4 @@
-///! Marker trait for Interval Types.
+//! Marker trait for Interval Types.
 
 /// A marker trait for interval types. Default implemented for standard integral and floating-point types.
 ///

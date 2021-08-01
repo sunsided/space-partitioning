@@ -1,4 +1,4 @@
-///! `Interval<T>` for capturing intervals.
+//! `Interval<T>` for capturing intervals.
 pub use crate::interval_tree::interval_type::IntervalType;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::RangeInclusive;
