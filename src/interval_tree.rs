@@ -74,6 +74,15 @@ where
     }
 }
 
+impl<T, D> From<(Interval<T>, D)> for IntervalTree<T, D>
+where
+    T: IntervalType,
+{
+    fn from(value: (Interval<T>, D)) -> Self {
+        Self::new(Node::new_pair(value.0, value.1))
+    }
+}
+
 impl<T, const N: usize> From<[RangeInclusive<T>; N]> for IntervalTree<T, ()>
 where
     T: IntervalType,
