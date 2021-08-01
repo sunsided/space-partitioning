@@ -1,3 +1,5 @@
+pub mod interval_tree;
+
 #[cfg(test)]
 mod tests {
     #[test]
