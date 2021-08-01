@@ -1,4 +1,4 @@
-use crate::interval_tree::{ChildNode, Node};
+use crate::interval_tree::node::{ChildNode, Node};
 
 #[derive(Debug)]
 enum State<'a, T> {
@@ -11,30 +11,43 @@ enum State<'a, T> {
 
 #[derive(Debug)]
 pub struct InorderIterator<'a, T> {
-    root: &'a Node<T>,
+    root: Option<&'a Node<T>>,
     current_state: State<'a, T>,
 }
 
 impl<'a, T> InorderIterator<'a, T> {
     pub(crate) fn new(root: &'a Node<T>) -> Self {
         Self {
-            root,
+            root: Some(root),
             current_state: State::Initial,
+        }
+    }
+
+    pub(crate) fn empty() -> Self {
+        Self {
+            root: None,
+            current_state: State::Done,
         }
     }
 }
 
-impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
+impl<'a, T: Clone + PartialOrd> Iterator for InorderIterator<'a, T> {
     type Item = &'a Node<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.root.is_none() {
+            return None;
+        }
+
+        let root = self.root.unwrap();
+
         loop {
             match &mut self.current_state {
                 // The initial state is entered always.
                 State::Initial => {
-                    if let Some(left) = &self.root.left {
+                    if let Some(left) = &root.left {
                         let iter = left.iter_inorder();
-                        self.current_state = State::EmitLeft(Box::new(iter));
+                        self.current_state = State::EmitLeft(Box::new(iter))
                     } else {
                         self.current_state = State::EmitSelf;
                     }
@@ -49,13 +62,13 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
                 }
                 // The "self" state is entered always.
                 State::EmitSelf => {
-                    if let Some(right) = &self.root.right {
+                    if let Some(right) = &root.right {
                         let iter = right.iter_inorder();
                         self.current_state = State::EmitRight(Box::new(iter));
                     } else {
                         self.current_state = State::Done;
                     }
-                    return Some(self.root);
+                    return Some(root);
                 }
                 // Only happens when there is a right child,
                 // enumerate until it is exhausted.
@@ -74,7 +87,11 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.root.len();
+        if self.root.is_none() {
+            return (0, None);
+        }
+
+        let size = self.root.unwrap().len();
         return (size, Some(size));
     }
 
@@ -82,11 +99,20 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
     where
         Self: Sized,
     {
-        self.root.len()
+        if let Some(node) = self.root {
+            node.len()
+        } else {
+            0
+        }
     }
 
     fn last(self) -> Option<Self::Item> {
-        let mut token = self.root;
+        if self.root.is_none() {
+            return None;
+        }
+
+        let mut token = self.root.unwrap();
+
         while token.right.is_some() {
             token = token.right.as_ref().unwrap();
         }
@@ -118,33 +144,51 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
             inorder(&node.as_ref().unwrap(), f);
         }
 
-        inorder(self.root, &mut f);
+        if let Some(root) = self.root {
+            inorder(&root, &mut f);
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::interval_tree::{test::construct_test_tree, ChildNode, Node};
+    use crate::interval_tree::node::test::construct_test_root_node;
+    use crate::interval_tree::node::ChildNode;
+    use crate::interval_tree::{InorderIterator, Node};
     use std::fmt::Debug;
 
     #[test]
+    fn size_hint_when_empty_works() {
+        let iter = InorderIterator::<i32>::empty();
+        let (min, max) = iter.size_hint();
+        assert_eq!(min, 0);
+        assert_eq!(max, None);
+    }
+
+    #[test]
     fn size_hint_works() {
-        let root = construct_test_tree();
+        let root = construct_test_root_node();
         let (min, max) = root.iter_inorder().size_hint();
         assert_eq!(min, 6);
         assert_eq!(max, Some(6));
     }
 
     #[test]
+    fn count_when_empty_works() {
+        let iter = InorderIterator::<i32>::empty();
+        assert_eq!(iter.count(), 0);
+    }
+
+    #[test]
     fn count_works() {
-        let root = construct_test_tree();
+        let root = construct_test_root_node();
         let count = root.iter_inorder().count();
         assert_eq!(count, 6);
     }
 
     #[test]
     fn last_works() {
-        let root = construct_test_tree();
+        let root = construct_test_root_node();
         let last = root.iter_inorder().last();
         assert!(last.is_some());
         let last = last.unwrap();
@@ -153,8 +197,14 @@ mod test {
     }
 
     #[test]
+    fn iteration_when_empty_works() {
+        let mut iter = InorderIterator::<i32>::empty();
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
     fn iteration_works() {
-        let root = construct_test_tree();
+        let root = construct_test_root_node();
 
         // Collect the expected nodes.
         let mut expected = Vec::default();
@@ -175,7 +225,7 @@ mod test {
 
     #[test]
     fn for_each_works() {
-        let root = construct_test_tree();
+        let root = construct_test_root_node();
 
         // Collect the expected nodes.
         let mut expected = Vec::default();
