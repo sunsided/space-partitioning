@@ -8,8 +8,8 @@ pub struct Interval<T>
 where
     T: IntervalType,
 {
-    pub low: T,
-    pub high: T,
+    pub start: T,
+    pub end: T,
 }
 
 impl<T> Interval<T>
@@ -17,7 +17,10 @@ where
     T: IntervalType,
 {
     pub fn new(low: T, high: T) -> Self {
-        Self { low, high }
+        Self {
+            start: low,
+            end: high,
+        }
     }
 }
 
@@ -26,7 +29,7 @@ where
     T: Debug + IntervalType,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{:?}, {:?}]", self.low, self.high)
+        write!(f, "[{:?}, {:?}]", self.start, self.end)
     }
 }
 
@@ -35,7 +38,7 @@ where
     T: Display + IntervalType,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}, {}]", self.low, self.high)
+        write!(f, "[{}, {}]", self.start, self.end)
     }
 }
 
@@ -45,8 +48,8 @@ where
 {
     fn from(interval: (T, T)) -> Self {
         Self {
-            low: interval.0,
-            high: interval.1,
+            start: interval.0,
+            end: interval.1,
         }
     }
 }
@@ -57,8 +60,8 @@ where
 {
     fn from(range: RangeInclusive<T>) -> Self {
         Self {
-            low: range.start().clone(),
-            high: range.end().clone(),
+            start: range.start().clone(),
+            end: range.end().clone(),
         }
     }
 }
@@ -69,8 +72,8 @@ where
 {
     fn from(range: &RangeInclusive<T>) -> Self {
         Self {
-            low: range.start().clone(),
-            high: range.end().clone(),
+            start: range.start().clone(),
+            end: range.end().clone(),
         }
     }
 }
@@ -81,6 +84,6 @@ where
 {
     /// A utility function to check if given two intervals overlap.
     pub fn overlaps_with(&self, other: &Interval<T>) -> bool {
-        (self.low <= other.high) && (other.low <= self.high)
+        (self.start <= other.end) && (other.start <= self.end)
     }
 }

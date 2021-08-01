@@ -125,7 +125,7 @@ where
 {
     /// A utility function to create a new Interval Search Tree Node.
     pub(crate) fn new(entry: Entry<T, D>) -> Self {
-        let max = entry.interval.high.clone();
+        let max = entry.interval.end.clone();
         Self {
             entry,
             max,
@@ -187,12 +187,12 @@ where
         // is used to maintain BST property
 
         // Get low/high value of interval at root.
-        let low = self.entry.interval.low.clone();
-        let high = self.entry.interval.high.clone();
+        let low = self.entry.interval.start.clone();
+        let high = self.entry.interval.end.clone();
 
         // If root's low value is smaller, then new interval goes to
         // left subtree, otherwise it goes to the right subtree.
-        if node.entry.interval.low < low {
+        if node.entry.interval.start < low {
             match &mut self.left {
                 Some(left) => {
                     left.insert(node);
@@ -231,7 +231,7 @@ where
         // If left child of root is present and max of left child is
         // greater than or equal to given interval, then the interval may
         // overlap with an interval of left subtree.
-        if self.left.is_some() && self.left.as_ref().unwrap().max >= interval.low {
+        if self.left.is_some() && self.left.as_ref().unwrap().max >= interval.start {
             return self.left.as_ref().unwrap().overlap_search(interval.clone());
         }
 

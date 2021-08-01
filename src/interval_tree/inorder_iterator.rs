@@ -205,8 +205,8 @@ mod test {
         let last = root.iter_inorder().last();
         assert!(last.is_some());
         let last = last.unwrap();
-        assert_eq!(last.entry.interval.low, 30);
-        assert_eq!(last.entry.interval.high, 40);
+        assert_eq!(last.entry.interval.start, 30);
+        assert_eq!(last.entry.interval.end, 40);
     }
 
     #[test]
