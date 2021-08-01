@@ -166,4 +166,34 @@ mod test {
             assert_eq!(last.entry.interval.end, 40);
         }
     }
+
+    mod search {
+        use super::*;
+
+        #[test]
+        fn overlap_search_works() {
+            let tree =
+                IntervalTree::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40]);
+            let overlap = tree.overlap_search(Interval::from(6..=7));
+            assert_eq!(overlap, Some(Interval::from(5..=20)));
+        }
+    }
+
+    mod utility {
+        use super::*;
+        use std::ops::RangeInclusive;
+
+        #[test]
+        fn len_works() {
+            let tree =
+                IntervalTree::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40]);
+            assert_eq!(tree.len(), 6);
+        }
+
+        #[test]
+        fn len_when_empty_works() {
+            let tree = IntervalTree::from_iter([] as [RangeInclusive<i32>; 0]);
+            assert_eq!(tree.len(), 0);
+        }
+    }
 }
