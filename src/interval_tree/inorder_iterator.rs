@@ -30,63 +30,71 @@ impl<'a, T: Copy + PartialOrd> Iterator for InorderIterator<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match &mut self.current_state {
+                // The initial state is entered always.
                 State::Initial => {
-                    if self.root.left.is_none() {
-                        // If there is no left child we directly jump to emitting
-                        // the "root" node.
-                        self.current_state = State::EmitSelf;
-                    } else {
-                        // If there is a left child we go on to emit its own values.
-                        let iter = self.root.left.as_ref().unwrap().iter_inorder();
+                    if let Some(left) = &self.root.left {
+                        let iter = left.iter_inorder();
                         self.current_state = State::EmitLeft(Box::new(iter));
+                    } else {
+                        self.current_state = State::EmitSelf;
                     }
                 }
-                // Only happens when there is a left child, enumerate until it is exhausted.
+                // Only happens when there is a left child,
+                // enumerate until it is exhausted.
                 State::EmitLeft(iter) => {
                     if let Some(value) = iter.next() {
                         return Some(value);
                     }
                     self.current_state = State::EmitSelf;
                 }
+                // The "self" state is entered always.
                 State::EmitSelf => {
-                    if self.root.right.is_none() {
-                        // If there is no right node, we emit the "root" node, and proceed to done.
-                        self.current_state = State::Done;
-                    } else {
-                        // If there is a right node, we emit the "root" node, and proceed to
-                        // emitting the right side.
-                        let iter = self.root.right.as_ref().unwrap().iter_inorder();
+                    if let Some(right) = &self.root.right {
+                        let iter = right.iter_inorder();
                         self.current_state = State::EmitRight(Box::new(iter));
+                    } else {
+                        self.current_state = State::Done;
                     }
                     return Some(self.root);
                 }
-                // Only happens when there is a right child, enumerate until it is exhausted.
+                // Only happens when there is a right child,
+                // enumerate until it is exhausted.
                 State::EmitRight(iter) => {
                     if let Some(value) = iter.next() {
                         return Some(value);
                     }
                     self.current_state = State::Done;
                 }
+                // The "Done" state is entered last.
                 State::Done => {
                     return None;
                 }
             }
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.root.len();
+        return (size, Some(size));
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::interval_tree::{ChildNode, Node};
+    use crate::interval_tree::{test::construct_test_tree, ChildNode, Node};
     use std::fmt::Debug;
 
     #[test]
-    fn it_works() {
-        let intervals = [15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40];
-        let mut root = Node::new((&intervals[0]).into());
-        for interval in intervals.iter().skip(1) {
-            root.insert(interval.into());
-        }
+    fn size_hint_works() {
+        let root = construct_test_tree();
+        let (min, max) = root.iter_inorder().size_hint();
+        assert_eq!(min, 6);
+        assert_eq!(max, Some(6));
+    }
+
+    #[test]
+    fn iteration_works() {
+        let root = construct_test_tree();
 
         // Collect the expected nodes.
         let mut expected = Vec::default();

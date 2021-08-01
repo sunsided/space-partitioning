@@ -54,7 +54,7 @@ impl<T: Copy> From<&std::ops::RangeInclusive<T>> for Interval<T> {
 
 impl<T: PartialOrd> Interval<T> {
     /// A utility function to check if given two intervals overlap.
-    pub fn overlaps_with(&self, other: Interval<T>) -> bool {
+    pub fn overlaps_with(&self, other: &Interval<T>) -> bool {
         (self.low <= other.high) && (other.low <= self.high)
     }
 }
