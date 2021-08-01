@@ -1,3 +1,4 @@
+///! Provides an `Iterator` that yields elements in order of interval starting points.
 use crate::interval_tree::interval::IntervalType;
 use crate::interval_tree::interval_tree_node::{ChildNode, IntervalTreeNode};
 use crate::interval_tree::IntervalTreeEntry;

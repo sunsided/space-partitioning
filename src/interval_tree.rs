@@ -34,7 +34,7 @@ where
     /// # Example
     /// ```rust
     /// use space_partitioning::IntervalTree;
-    /// let tree = IntervalTree::default();
+    /// let tree = IntervalTree::<i32, ()>::default();
     /// assert_eq!(tree.len(), 0);
     /// ```
     fn default() -> Self {
