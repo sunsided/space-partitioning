@@ -116,9 +116,12 @@ where
 
     /// The main function that searches a given interval i in a given
     /// Interval Tree.
-    pub(crate) fn overlap_search(&self, interval: Interval<T>) -> Option<&IntervalTreeEntry<T, D>> {
+    pub(crate) fn overlap_search(
+        &self,
+        interval: &Interval<T>,
+    ) -> Option<&IntervalTreeEntry<T, D>> {
         // Check for overlap with root.
-        if self.entry.interval.overlaps_with(&interval) {
+        if self.entry.interval.overlaps_with(interval) {
             return Some(&self.entry);
         }
 
@@ -126,16 +129,12 @@ where
         // greater than or equal to given interval, then the interval may
         // overlap with an interval of left subtree.
         if self.left.is_some() && self.left.as_ref().unwrap().max >= interval.start {
-            return self.left.as_ref().unwrap().overlap_search(interval.clone());
+            return self.left.as_ref().unwrap().overlap_search(interval);
         }
 
         // Else interval can only overlap with right subtree, or not at all.
         if self.right.is_some() {
-            return self
-                .right
-                .as_ref()
-                .unwrap()
-                .overlap_search(interval.clone());
+            return self.right.as_ref().unwrap().overlap_search(interval);
         }
 
         None
@@ -208,7 +207,7 @@ pub(crate) mod test {
     #[test]
     fn overlap_search_works() {
         let root = construct_test_root_node();
-        let overlap = root.overlap_search(Interval::from(6..=7));
+        let overlap = root.overlap_search(&Interval::from(6..=7));
         assert_eq!(overlap.unwrap().interval, Interval::from(5..=20));
     }
 

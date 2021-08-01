@@ -1,7 +1,6 @@
 ///! According to Wikipedia:
 ///! > An interval tree is a tree data structure to hold intervals.
 ///! > Specifically, it allows one to efficiently find all intervals that overlap with any given interval or point.
-// https://www.geeksforgeeks.org/interval-tree/
 mod inorder_iterator;
 mod interval;
 mod interval_tree_entry;
@@ -136,17 +135,26 @@ where
     /// let mut tree = IntervalTree::new_from_entry((15..=20, "A"));
     /// tree.insert((100..=101, "B"));
     ///
-    /// let matched = tree.overlap_search((18..=25).into()).unwrap();
-    /// assert_eq!(matched.interval.start, 15);
-    /// assert_eq!(matched.interval.end, 20);
-    /// assert_eq!(matched.data, "A");
+    /// let matched_a = tree.overlap_search(&(18..=25).into()).unwrap();
+    /// assert_eq!(matched_a.interval.start, 15);
+    /// assert_eq!(matched_a.interval.end, 20);
+    /// assert_eq!(matched_a.data, "A");
     ///
-    /// let no_match = tree.overlap_search((0..=5).into());
+    /// let matched_b = tree.overlap_search(&(100..=100).into()).unwrap();
+    /// assert_eq!(matched_b.interval.start, 100);
+    /// assert_eq!(matched_b.interval.end, 101);
+    /// assert_eq!(matched_b.data, "B");
+    ///
+    /// let no_match = tree.overlap_search(0..=5);
     /// assert!(no_match.is_none());
     /// ```
-    pub fn overlap_search(&self, interval: Interval<T>) -> Option<&IntervalTreeEntry<T, D>> {
+    pub fn overlap_search<I>(&self, interval: I) -> Option<&IntervalTreeEntry<T, D>>
+    where
+        I: Into<Interval<T>>,
+    {
         if let Some(node) = &self.root {
-            node.overlap_search(interval)
+            let interval = interval.into();
+            node.overlap_search(&interval)
         } else {
             None
         }
@@ -346,6 +354,41 @@ mod test {
         fn len_when_empty_works() {
             let tree = IntervalTree::from_iter([] as [RangeInclusive<i32>; 0]);
             assert_eq!(tree.len(), 0);
+        }
+    }
+
+    mod multi_dimensional {
+        use super::*;
+
+        #[derive(Debug, PartialOrd, PartialEq, Copy, Clone, Default)]
+        struct Vec2d {
+            pub x: f64,
+            pub y: f64,
+        }
+
+        impl IntervalType for Vec2d {}
+
+        #[test]
+        fn it_works() {
+            let tree = IntervalTree::from_iter([
+                (
+                    Interval::new(Vec2d { x: 1., y: 2. }, Vec2d { x: 10., y: 10. }),
+                    "A",
+                ),
+                (
+                    Interval::new(Vec2d { x: -5., y: -5. }, Vec2d { x: 5., y: 5. }),
+                    "B",
+                ),
+                (
+                    Interval::new(Vec2d { x: -10., y: -10. }, Vec2d { x: -7., y: -7. }),
+                    "C",
+                ),
+            ]);
+
+            let test = Interval::new(Vec2d::default(), Vec2d::default());
+            let result = tree.overlap_search(test).unwrap();
+
+            assert_eq!(result.data, "B")
         }
     }
 }
