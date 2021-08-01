@@ -1,65 +1,12 @@
 // https://www.geeksforgeeks.org/interval-tree/
 
-use std::fmt::{Debug, Display, Formatter};
+mod inorder_iterator;
+mod interval;
 
-/// Structure to represent an interval.
-#[derive(Default, Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
-pub struct Interval<T> {
-    low: T,
-    high: T,
-}
+pub use interval::Interval;
 
-impl<T> Interval<T> {
-    pub fn new(low: T, high: T) -> Self {
-        Self { low, high }
-    }
-}
-
-impl<T: Debug> Debug for Interval<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{:?}, {:?}]", self.low, self.high)
-    }
-}
-
-impl<T: Display> Display for Interval<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}, {}]", self.low, self.high)
-    }
-}
-
-impl<T> From<(T, T)> for Interval<T> {
-    fn from(interval: (T, T)) -> Self {
-        Self {
-            low: interval.0,
-            high: interval.1,
-        }
-    }
-}
-
-impl<T: Copy> From<std::ops::RangeInclusive<T>> for Interval<T> {
-    fn from(range: std::ops::RangeInclusive<T>) -> Self {
-        Self {
-            low: *range.start(),
-            high: *range.end(),
-        }
-    }
-}
-
-impl<T: Copy> From<&std::ops::RangeInclusive<T>> for Interval<T> {
-    fn from(range: &std::ops::RangeInclusive<T>) -> Self {
-        Self {
-            low: *range.start(),
-            high: *range.end(),
-        }
-    }
-}
-
-impl<T: PartialOrd> Interval<T> {
-    /// A utility function to check if given two intervals overlap.
-    fn overlaps_with(&self, other: Interval<T>) -> bool {
-        (self.low <= other.high) && (other.low <= self.high)
-    }
-}
+use crate::interval_tree::inorder_iterator::InorderIterator;
+use std::fmt::{Debug, Formatter};
 
 /// A child node in the tree.
 pub type ChildNode<T> = Option<Box<Node<T>>>;
@@ -150,6 +97,10 @@ impl<T: Copy + PartialOrd<T>> Node<T> {
 
         None
     }
+
+    pub fn iter_inorder(&self) -> InorderIterator<T> {
+        InorderIterator::new(&self)
+    }
 }
 
 #[cfg(test)]
@@ -165,23 +116,11 @@ mod test {
         }
 
         println!("Inorder traversal of constructed Interval Tree:");
-        inorder(&root);
+        for node in root.iter_inorder() {
+            println!("{:?}", node);
+        }
 
         let overlap = root.overlap_search(Interval::from(6..=7));
         assert_eq!(overlap, Some(Interval::from(5..=20)));
-    }
-
-    fn inorder<T: Debug>(node: &Node<T>) {
-        inorder_child(&node.left);
-        println!("{:?} max = {:?}", node.interval, node.max);
-        inorder_child(&node.right);
-    }
-
-    fn inorder_child<T: Debug>(node: &ChildNode<T>) {
-        if node.is_none() {
-            return;
-        }
-
-        inorder(&node.as_ref().unwrap());
     }
 }
