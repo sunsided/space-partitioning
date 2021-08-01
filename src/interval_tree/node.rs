@@ -22,7 +22,7 @@ where
 
 impl<T, D> Entry<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     pub fn new<I>(interval: I, data: D) -> Self
     where
@@ -77,7 +77,7 @@ where
 
 impl<T, D> From<Entry<T, D>> for Node<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(value: Entry<T, D>) -> Self {
         Node::new(value)
@@ -87,7 +87,7 @@ where
 impl<I, T, D> std::iter::FromIterator<I> for Node<T, D>
 where
     I: Into<Entry<T, D>>,
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from_iter<Iter>(iter: Iter) -> Self
     where
@@ -155,7 +155,7 @@ where
     }
 }
 
-impl<T: Clone + PartialOrd<T>> Node<T, ()>
+impl<T> Node<T, ()>
 where
     T: IntervalType,
 {
@@ -177,7 +177,7 @@ where
     }
 }
 
-impl<T: Clone + PartialOrd<T>, D> Node<T, D>
+impl<T, D> Node<T, D>
 where
     T: IntervalType,
 {

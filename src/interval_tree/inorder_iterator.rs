@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<'a, T: Clone + PartialOrd, D> Iterator for InorderIterator<'a, T, D>
+impl<'a, T, D> Iterator for InorderIterator<'a, T, D>
 where
     T: IntervalType,
 {

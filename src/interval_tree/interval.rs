@@ -53,7 +53,7 @@ where
 
 impl<T> From<std::ops::RangeInclusive<T>> for Interval<T>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(range: RangeInclusive<T>) -> Self {
         Self {
@@ -65,7 +65,7 @@ where
 
 impl<T> From<&std::ops::RangeInclusive<T>> for Interval<T>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(range: &RangeInclusive<T>) -> Self {
         Self {

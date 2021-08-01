@@ -1,4 +1,4 @@
-pub trait IntervalType: PartialOrd {}
+pub trait IntervalType: Clone + PartialOrd {}
 
 impl IntervalType for i8 {}
 impl IntervalType for u8 {}

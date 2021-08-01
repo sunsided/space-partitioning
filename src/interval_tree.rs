@@ -15,14 +15,14 @@ use std::ops::RangeInclusive;
 #[derive(Default)]
 pub struct IntervalTree<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     root: Option<Node<T, D>>,
 }
 
 impl<T, D> IntervalTree<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn new(root: Node<T, D>) -> Self {
         Self { root: Some(root) }
@@ -56,9 +56,9 @@ where
     }
 }
 
-impl<T: Debug + Clone + PartialOrd, D> Debug for IntervalTree<T, D>
+impl<T, D> Debug for IntervalTree<T, D>
 where
-    T: IntervalType,
+    T: Debug + IntervalType,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "len = {}", self.len())
@@ -67,7 +67,7 @@ where
 
 impl<T> From<Interval<T>> for IntervalTree<T, ()>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(interval: Interval<T>) -> Self {
         Self::new(Node::new_pair(interval, ()))
@@ -76,7 +76,7 @@ where
 
 impl<T, const N: usize> From<[RangeInclusive<T>; N]> for IntervalTree<T, ()>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(intervals: [RangeInclusive<T>; N]) -> Self {
         IntervalTree::new(Node::from_ranges_empty(intervals))
@@ -85,7 +85,7 @@ where
 
 impl<T, D, const N: usize> From<[(Interval<T>, D); N]> for IntervalTree<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(intervals: [(Interval<T>, D); N]) -> Self {
         use std::iter::FromIterator;
@@ -95,7 +95,7 @@ where
 
 impl<T, D, const N: usize> From<[(RangeInclusive<T>, D); N]> for IntervalTree<T, D>
 where
-    T: Clone + IntervalType,
+    T: IntervalType,
 {
     fn from(intervals: [(RangeInclusive<T>, D); N]) -> Self {
         use std::iter::FromIterator;
