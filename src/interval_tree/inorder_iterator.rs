@@ -1,5 +1,5 @@
 use crate::interval_tree::interval::IntervalType;
-use crate::interval_tree::node::{ChildNode, Node};
+use crate::interval_tree::interval_tree_node::{ChildNode, IntervalTreeNode};
 
 #[derive(Debug)]
 enum State<'a, T, D>
@@ -18,7 +18,7 @@ pub struct InorderIterator<'a, T, D>
 where
     T: IntervalType,
 {
-    root: Option<&'a Node<T, D>>,
+    root: Option<&'a IntervalTreeNode<T, D>>,
     current_state: State<'a, T, D>,
 }
 
@@ -26,7 +26,7 @@ impl<'a, T, D> InorderIterator<'a, T, D>
 where
     T: IntervalType,
 {
-    pub(crate) fn new(root: &'a Node<T, D>) -> Self {
+    pub(crate) fn new(root: &'a IntervalTreeNode<T, D>) -> Self {
         Self {
             root: Some(root),
             current_state: State::Initial,
@@ -45,7 +45,7 @@ impl<'a, T, D> Iterator for InorderIterator<'a, T, D>
 where
     T: IntervalType,
 {
-    type Item = &'a Node<T, D>;
+    type Item = &'a IntervalTreeNode<T, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.root.is_none() {
@@ -137,9 +137,9 @@ where
     where
         F: FnMut(Self::Item),
     {
-        fn inorder<'a, T, D, F>(node: &'a Node<T, D>, f: &mut F)
+        fn inorder<'a, T, D, F>(node: &'a IntervalTreeNode<T, D>, f: &mut F)
         where
-            F: FnMut(&'a Node<T, D>),
+            F: FnMut(&'a IntervalTreeNode<T, D>),
             T: IntervalType,
         {
             inorder_child(&node.left, f);
@@ -149,7 +149,7 @@ where
 
         fn inorder_child<'a, T, D, F>(node: &'a ChildNode<T, D>, f: &mut F)
         where
-            F: FnMut(&'a Node<T, D>),
+            F: FnMut(&'a IntervalTreeNode<T, D>),
             T: IntervalType,
         {
             if node.is_none() {
@@ -167,8 +167,8 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::interval_tree::node::{test::construct_test_root_node, ChildNode};
-    use crate::interval_tree::{InorderIterator, IntervalType, Node};
+    use crate::interval_tree::interval_tree_node::{test::construct_test_root_node, ChildNode};
+    use crate::interval_tree::{InorderIterator, IntervalTreeNode, IntervalType};
 
     #[test]
     fn size_hint_when_empty_works() {
@@ -255,8 +255,10 @@ mod test {
         }
     }
 
-    fn collect_inorder<'a, T, D>(node: &'a Node<T, D>, out: &mut Vec<&'a Node<T, D>>)
-    where
+    fn collect_inorder<'a, T, D>(
+        node: &'a IntervalTreeNode<T, D>,
+        out: &mut Vec<&'a IntervalTreeNode<T, D>>,
+    ) where
         T: IntervalType,
     {
         collect_inorder_child(&node.left, out);
@@ -264,8 +266,10 @@ mod test {
         collect_inorder_child(&node.right, out);
     }
 
-    fn collect_inorder_child<'a, T, D>(node: &'a ChildNode<T, D>, out: &mut Vec<&'a Node<T, D>>)
-    where
+    fn collect_inorder_child<'a, T, D>(
+        node: &'a ChildNode<T, D>,
+        out: &mut Vec<&'a IntervalTreeNode<T, D>>,
+    ) where
         T: IntervalType,
     {
         if node.is_none() {

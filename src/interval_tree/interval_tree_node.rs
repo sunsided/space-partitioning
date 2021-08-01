@@ -1,130 +1,25 @@
-use crate::interval_tree::{InorderIterator, Interval, IntervalType};
-use std::fmt::{Debug, Formatter};
-use std::ops::RangeInclusive;
-
-pub struct Entry<T, D>
-where
-    T: IntervalType,
-{
-    pub interval: Interval<T>,
-    pub data: D,
-}
-
-impl<T, D> Debug for Entry<T, D>
-where
-    T: Debug + IntervalType,
-    D: Debug,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} data = {:?}", self.interval, self.data)
-    }
-}
-
-impl<T, D> Entry<T, D>
-where
-    T: IntervalType,
-{
-    pub fn new<I>(interval: I, data: D) -> Self
-    where
-        I: Into<Interval<T>>,
-    {
-        Self {
-            interval: interval.into(),
-            data,
-        }
-    }
-}
-
-impl<I, T, D> From<(I, D)> for Entry<T, D>
-where
-    I: Into<Interval<T>>,
-    T: IntervalType,
-{
-    fn from(pair: (I, D)) -> Self {
-        Self {
-            interval: pair.0.into(),
-            data: pair.1,
-        }
-    }
-}
-
-impl<I, T> From<I> for Entry<T, ()>
-where
-    I: Into<Interval<T>>,
-    T: IntervalType,
-{
-    fn from(value: I) -> Self {
-        Self {
-            interval: value.into(),
-            data: (),
-        }
-    }
-}
+use crate::interval_tree::{InorderIterator, Interval, IntervalTreeEntry, IntervalType};
 
 /// A child node in the tree.
-pub type ChildNode<T, D> = Option<Box<Node<T, D>>>;
+pub type ChildNode<T, D> = Option<Box<IntervalTreeNode<T, D>>>;
 
 /// Structure to represent a node in Interval Search Tree.
-pub struct Node<T, D>
+pub struct IntervalTreeNode<T, D>
 where
     T: IntervalType,
 {
-    pub entry: Entry<T, D>,
+    pub entry: IntervalTreeEntry<T, D>,
     max: T,
     pub(crate) left: ChildNode<T, D>,
     pub(crate) right: ChildNode<T, D>,
 }
 
-impl<T, D> From<Entry<T, D>> for Node<T, D>
-where
-    T: IntervalType,
-{
-    fn from(value: Entry<T, D>) -> Self {
-        Node::new(value)
-    }
-}
-
-impl<I, T, D> std::iter::FromIterator<I> for Node<T, D>
-where
-    I: Into<Entry<T, D>>,
-    T: IntervalType,
-{
-    fn from_iter<Iter>(iter: Iter) -> Self
-    where
-        Iter: IntoIterator<Item = I>,
-    {
-        let mut root: Option<Node<T, D>> = None;
-        for into_entry in iter.into_iter() {
-            let entry: Entry<T, D> = into_entry.into();
-
-            let new_node = Node::from(entry);
-            if root.is_some() {
-                root.as_mut().unwrap().insert(new_node);
-            } else {
-                root = Some(new_node)
-            }
-        }
-
-        debug_assert!(root.is_some());
-        root.unwrap()
-    }
-}
-
-impl<T: std::fmt::Debug, D> std::fmt::Debug for Node<T, D>
-where
-    T: IntervalType,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} max = {:?}", self.entry.interval, self.max)
-    }
-}
-
-impl<T: Clone, D> Node<T, D>
+impl<T, D> IntervalTreeNode<T, D>
 where
     T: IntervalType,
 {
     /// A utility function to create a new Interval Search Tree Node.
-    pub(crate) fn new(entry: Entry<T, D>) -> Self {
+    pub(crate) fn new(entry: IntervalTreeEntry<T, D>) -> Self {
         let max = entry.interval.end.clone();
         Self {
             entry,
@@ -135,11 +30,11 @@ where
     }
 
     /// A utility function to create a new Interval Search Tree Node.
-    pub(crate) fn new_pair<I>(interval: I, data: D) -> Self
+    pub(crate) fn new_from_pair<I>(interval: I, data: D) -> Self
     where
         I: Into<Interval<T>>,
     {
-        Self::new(Entry::new(interval, data))
+        Self::new(IntervalTreeEntry::new(interval, data))
     }
 
     /// Gets the size of the tree, i.e., the number of intervals stored.
@@ -153,36 +48,9 @@ where
         }
         size
     }
-}
 
-impl<T> Node<T, ()>
-where
-    T: IntervalType,
-{
-    pub(crate) fn from_ranges_empty<const N: usize>(intervals: [RangeInclusive<T>; N]) -> Self {
-        let mut root: Option<Self> = None;
-        for range in intervals.iter() {
-            let entry = Entry::new(range, ());
-            let new_node = Node::new(entry);
-
-            if root.is_some() {
-                root.as_mut().unwrap().insert(new_node);
-            } else {
-                root = Some(new_node)
-            }
-        }
-
-        debug_assert!(root.is_some());
-        root.unwrap()
-    }
-}
-
-impl<T, D> Node<T, D>
-where
-    T: IntervalType,
-{
     /// A utility function to insert a new Interval Search Tree Node
-    pub(crate) fn insert(&mut self, node: Node<T, D>) -> &Self {
+    pub(crate) fn insert(&mut self, node: IntervalTreeNode<T, D>) -> &Self {
         // This is similar to BST Insert.  Here the low value of interval
         // is used to maintain BST property
 
@@ -253,14 +121,58 @@ where
     }
 }
 
+impl<T, D> From<IntervalTreeEntry<T, D>> for IntervalTreeNode<T, D>
+where
+    T: IntervalType,
+{
+    fn from(value: IntervalTreeEntry<T, D>) -> Self {
+        IntervalTreeNode::new(value)
+    }
+}
+
+impl<I, T, D> std::iter::FromIterator<I> for IntervalTreeNode<T, D>
+where
+    I: Into<IntervalTreeEntry<T, D>>,
+    T: IntervalType,
+{
+    fn from_iter<Iter>(iter: Iter) -> Self
+    where
+        Iter: IntoIterator<Item = I>,
+    {
+        let mut root: Option<IntervalTreeNode<T, D>> = None;
+        for into_entry in iter.into_iter() {
+            let entry: IntervalTreeEntry<T, D> = into_entry.into();
+
+            let new_node = IntervalTreeNode::from(entry);
+            if root.is_some() {
+                root.as_mut().unwrap().insert(new_node);
+            } else {
+                root = Some(new_node)
+            }
+        }
+
+        debug_assert!(root.is_some());
+        root.unwrap()
+    }
+}
+
+impl<T: std::fmt::Debug, D> std::fmt::Debug for IntervalTreeNode<T, D>
+where
+    T: IntervalType,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} max = {:?}", self.entry.interval, self.max)
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
     use std::iter::FromIterator;
 
     /// Constructs a test tree.
-    pub fn construct_test_root_node() -> Node<i32, ()> {
-        Node::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
+    pub fn construct_test_root_node() -> IntervalTreeNode<i32, ()> {
+        IntervalTreeNode::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
     }
 
     #[test]

@@ -2,29 +2,30 @@
 
 mod inorder_iterator;
 mod interval;
+mod interval_tree_entry;
+mod interval_tree_node;
 mod interval_type;
-mod node;
 
 pub use inorder_iterator::InorderIterator;
 pub use interval::{Interval, IntervalType};
+pub use interval_tree_entry::IntervalTreeEntry;
 
-use crate::interval_tree::node::Node;
+use crate::interval_tree::interval_tree_node::IntervalTreeNode;
 use std::fmt::{Debug, Formatter};
-use std::ops::RangeInclusive;
 
 #[derive(Default)]
 pub struct IntervalTree<T, D>
 where
     T: IntervalType,
 {
-    root: Option<Node<T, D>>,
+    root: Option<IntervalTreeNode<T, D>>,
 }
 
 impl<T, D> IntervalTree<T, D>
 where
     T: IntervalType,
 {
-    fn new(root: Node<T, D>) -> Self {
+    fn new(root: IntervalTreeNode<T, D>) -> Self {
         Self { root: Some(root) }
     }
 
@@ -47,7 +48,7 @@ where
     }
 
     /// Iterates the tree in-order, i.e. earlier-starting intervals first.
-    pub fn iter_inorder(&self) -> impl Iterator<Item = &Node<T, D>> {
+    pub fn iter_inorder(&self) -> impl Iterator<Item = &IntervalTreeNode<T, D>> {
         if let Some(node) = &self.root {
             InorderIterator::new(node)
         } else {
@@ -70,7 +71,7 @@ where
     T: IntervalType,
 {
     fn from(interval: Interval<T>) -> Self {
-        Self::new(Node::new_pair(interval, ()))
+        Self::new(IntervalTreeNode::new_from_pair(interval, ()))
     }
 }
 
@@ -79,35 +80,90 @@ where
     T: IntervalType,
 {
     fn from(value: (Interval<T>, D)) -> Self {
-        Self::new(Node::new_pair(value.0, value.1))
+        Self::new(IntervalTreeNode::new_from_pair(value.0, value.1))
     }
 }
 
-impl<T, const N: usize> From<[RangeInclusive<T>; N]> for IntervalTree<T, ()>
+impl<I, T, D> std::iter::FromIterator<I> for IntervalTree<T, D>
 where
+    I: Into<IntervalTreeEntry<T, D>>,
     T: IntervalType,
 {
-    fn from(intervals: [RangeInclusive<T>; N]) -> Self {
-        IntervalTree::new(Node::from_ranges_empty(intervals))
+    fn from_iter<Iter>(iter: Iter) -> Self
+    where
+        Iter: IntoIterator<Item = I>,
+    {
+        IntervalTree::new(IntervalTreeNode::from_iter(iter))
     }
 }
 
-impl<T, D, const N: usize> From<[(Interval<T>, D); N]> for IntervalTree<T, D>
-where
-    T: IntervalType,
-{
-    fn from(intervals: [(Interval<T>, D); N]) -> Self {
-        use std::iter::FromIterator;
-        IntervalTree::new(Node::from_iter(intervals))
-    }
-}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::iter::FromIterator;
 
-impl<T, D, const N: usize> From<[(RangeInclusive<T>, D); N]> for IntervalTree<T, D>
-where
-    T: IntervalType,
-{
-    fn from(intervals: [(RangeInclusive<T>, D); N]) -> Self {
-        use std::iter::FromIterator;
-        IntervalTree::new(Node::from_iter(intervals))
+    mod from_iter {
+        use super::*;
+
+        #[test]
+        fn range_without_data_works() {
+            let tree =
+                IntervalTree::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40]);
+            assert_eq!(tree.len(), 6);
+        }
+
+        #[test]
+        fn interval_without_data_works() {
+            let tree = IntervalTree::from_iter([
+                Interval::from(15..=20),
+                (10..=30).into(),
+                (17..=19).into(),
+                (5..=20).into(),
+                (12..=15).into(),
+                (30..=40).into(),
+            ]);
+            assert_eq!(tree.len(), 6);
+        }
+
+        #[test]
+        fn range_with_data_works() {
+            let tree = IntervalTree::from_iter([
+                (15..=20, 1),
+                (10..=30, 2),
+                (17..=19, 3),
+                (5..=20, 4),
+                (12..=15, 5),
+                (30..=40, 6),
+            ]);
+            assert_eq!(tree.len(), 6);
+        }
+
+        #[test]
+        fn interval_with_data_works() {
+            let tree = IntervalTree::from_iter([
+                (Interval::from(15..=20), 1),
+                ((10..=30).into(), 2),
+                ((17..=19).into(), 3),
+                ((5..=20).into(), 4),
+                ((12..=15).into(), 5),
+                ((30..=40).into(), 6),
+            ]);
+            assert_eq!(tree.len(), 6);
+        }
+    }
+
+    mod iter {
+        use super::*;
+
+        #[test]
+        fn last_works() {
+            let tree =
+                IntervalTree::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40]);
+            let last = tree.iter_inorder().last();
+            assert!(last.is_some());
+            let last = last.unwrap();
+            assert_eq!(last.entry.interval.start, 30);
+            assert_eq!(last.entry.interval.end, 40);
+        }
     }
 }
