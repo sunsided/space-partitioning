@@ -1,5 +1,7 @@
+///! According to Wikipedia:
+///! > An interval tree is a tree data structure to hold intervals.
+///! > Specifically, it allows one to efficiently find all intervals that overlap with any given interval or point.
 // https://www.geeksforgeeks.org/interval-tree/
-
 mod inorder_iterator;
 mod interval;
 mod interval_tree_entry;
@@ -13,10 +15,13 @@ pub use interval_tree_entry::IntervalTreeEntry;
 use crate::interval_tree::interval_tree_node::{IntervalTreeNode, IntervalTreeNodeOption};
 use std::fmt::{Debug, Formatter};
 
+/// An Interval Tree.
 pub struct IntervalTree<T, D>
 where
     T: IntervalType,
 {
+    /// The root node. May not exist if the tree is default constructed
+    /// or initialized from an empty iterator.
     root: Option<IntervalTreeNode<T, D>>,
 }
 
@@ -24,6 +29,14 @@ impl<T, D> Default for IntervalTree<T, D>
 where
     T: IntervalType,
 {
+    /// Returns an empty `IntervalTree<T, D>`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// let tree = IntervalTree::default();
+    /// assert_eq!(tree.len(), 0);
+    /// ```
     fn default() -> Self {
         Self { root: None }
     }
@@ -33,6 +46,17 @@ impl<T, D> IntervalTree<T, D>
 where
     T: IntervalType,
 {
+    /// Creates a new `IntervalTree` from a root entry.
+    ///
+    /// # Parameters
+    /// * `entry` - The first entry.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// let tree = IntervalTree::new_from_entry((15..=20, "data"));
+    /// assert_eq!(tree.len(), 1);
+    /// ```
     pub fn new_from_entry<I>(entry: I) -> Self
     where
         I: Into<IntervalTreeEntry<T, D>>,
@@ -46,7 +70,18 @@ where
         Self { root: Some(root) }
     }
 
-    /// A utility function to insert a new Interval Search Tree Node
+    /// Inserts a new entry to the `IntervalTree`.
+    ///
+    /// # Parameters
+    /// * `entry` - The entry to insert.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// let mut tree = IntervalTree::default();
+    /// tree.insert((15..=20, "data"));
+    /// assert_eq!(tree.len(), 1);
+    /// ```
     pub fn insert<I>(&mut self, entry: I) -> &Self
     where
         I: Into<IntervalTreeEntry<T, D>>,
@@ -60,7 +95,14 @@ where
         self
     }
 
-    /// Returns the number of elements in the tree.
+    /// Returns the number of elements in the `IntervalTree`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// let tree = IntervalTree::new_from_entry((15..=20, "data"));
+    /// assert_eq!(tree.len(), 1);
+    /// ```
     pub fn len(&self) -> usize {
         return if let Some(node) = &self.root {
             node.len()
@@ -69,9 +111,40 @@ where
         };
     }
 
-    /// The main function that searches a given interval i in a given
-    /// Interval Tree.
-    pub fn overlap_search(&self, interval: Interval<T>) -> Option<Interval<T>> {
+    /// Returns whether the tree is empty, i.e., whether it has no elements.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// let tree = IntervalTree::<i32, ()>::default();
+    /// assert!(tree.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Queries the tree for overlaps with the specified `interval`.
+    ///
+    /// /// # Parameters
+    /// * `interval` - The interval to query for.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// use space_partitioning::interval_tree::Interval;
+    ///
+    /// let mut tree = IntervalTree::new_from_entry((15..=20, "A"));
+    /// tree.insert((100..=101, "B"));
+    ///
+    /// let matched = tree.overlap_search((18..=25).into()).unwrap();
+    /// assert_eq!(matched.interval.start, 15);
+    /// assert_eq!(matched.interval.end, 20);
+    /// assert_eq!(matched.data, "A");
+    ///
+    /// let no_match = tree.overlap_search((0..=5).into());
+    /// assert!(no_match.is_none());
+    /// ```
+    pub fn overlap_search(&self, interval: Interval<T>) -> Option<&IntervalTreeEntry<T, D>> {
         if let Some(node) = &self.root {
             node.overlap_search(interval)
         } else {
@@ -79,8 +152,30 @@ where
         }
     }
 
-    /// Iterates the tree in-order, i.e. earlier-starting intervals first.
-    pub fn iter_inorder(&self) -> impl Iterator<Item = &IntervalTreeNode<T, D>> {
+    /// Returns an `InorderIterator<T, D>` that iterates the tree elements in order
+    /// of their interval starts.
+    ///
+    /// # Example
+    /// ```rust
+    /// use space_partitioning::IntervalTree;
+    /// use std::iter::FromIterator;
+    ///
+    /// let tree = IntervalTree::from_iter([(18..=25, "abc"), (0..=20, "xyz")]);
+    /// let mut iter = tree.iter_inorder();
+    ///
+    /// let first = iter.next().unwrap();
+    /// assert_eq!(first.interval.start, 0);
+    /// assert_eq!(first.interval.end, 20);
+    /// assert_eq!(first.data, "xyz");
+    ///
+    /// let second = iter.next().unwrap();
+    /// assert_eq!(second.interval.start, 18);
+    /// assert_eq!(second.interval.end, 25);
+    /// assert_eq!(second.data, "abc");
+    ///
+    /// assert!(iter.next().is_none());
+    /// ```
+    pub fn iter_inorder(&self) -> InorderIterator<T, D> {
         if let Some(node) = &self.root {
             InorderIterator::new(node)
         } else {
@@ -219,8 +314,8 @@ mod test {
             let last = tree.iter_inorder().last();
             assert!(last.is_some());
             let last = last.unwrap();
-            assert_eq!(last.entry.interval.start, 30);
-            assert_eq!(last.entry.interval.end, 40);
+            assert_eq!(last.interval.start, 30);
+            assert_eq!(last.interval.end, 40);
         }
     }
 
@@ -232,7 +327,7 @@ mod test {
             let tree =
                 IntervalTree::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40]);
             let overlap = tree.overlap_search(Interval::from(6..=7));
-            assert_eq!(overlap, Some(Interval::from(5..=20)));
+            assert_eq!(overlap.unwrap().interval, Interval::from(5..=20));
         }
     }
 

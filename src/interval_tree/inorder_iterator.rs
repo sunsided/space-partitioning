@@ -1,5 +1,6 @@
 use crate::interval_tree::interval::IntervalType;
 use crate::interval_tree::interval_tree_node::{ChildNode, IntervalTreeNode};
+use crate::interval_tree::IntervalTreeEntry;
 
 #[derive(Debug)]
 enum State<'a, T, D>
@@ -45,7 +46,7 @@ impl<'a, T, D> Iterator for InorderIterator<'a, T, D>
 where
     T: IntervalType,
 {
-    type Item = &'a IntervalTreeNode<T, D>;
+    type Item = &'a IntervalTreeEntry<T, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.root.is_none() {
@@ -81,7 +82,7 @@ where
                     } else {
                         self.current_state = State::Done;
                     }
-                    return Some(root);
+                    return Some(&root.entry);
                 }
                 // Only happens when there is a right child,
                 // enumerate until it is exhausted.
@@ -130,7 +131,7 @@ where
             token = token.right.as_ref().unwrap();
         }
 
-        Some(token)
+        Some(&token.entry)
     }
 
     fn for_each<F>(self, mut f: F)
@@ -139,17 +140,17 @@ where
     {
         fn inorder<'a, T, D, F>(node: &'a IntervalTreeNode<T, D>, f: &mut F)
         where
-            F: FnMut(&'a IntervalTreeNode<T, D>),
+            F: FnMut(&'a IntervalTreeEntry<T, D>),
             T: IntervalType,
         {
             inorder_child(&node.left, f);
-            (*f)(node);
+            (*f)(&node.entry);
             inorder_child(&node.right, f);
         }
 
         fn inorder_child<'a, T, D, F>(node: &'a ChildNode<T, D>, f: &mut F)
         where
-            F: FnMut(&'a IntervalTreeNode<T, D>),
+            F: FnMut(&'a IntervalTreeEntry<T, D>),
             T: IntervalType,
         {
             if node.is_none() {
@@ -205,8 +206,8 @@ mod test {
         let last = root.iter_inorder().last();
         assert!(last.is_some());
         let last = last.unwrap();
-        assert_eq!(last.entry.interval.start, 30);
-        assert_eq!(last.entry.interval.end, 40);
+        assert_eq!(last.interval.start, 30);
+        assert_eq!(last.interval.end, 40);
     }
 
     #[test]
@@ -232,7 +233,7 @@ mod test {
         for node in root.iter_inorder() {
             let expected_node = expected.pop();
             assert!(expected_node.is_some());
-            assert_eq!(expected_node.unwrap().entry.interval, node.entry.interval);
+            assert_eq!(expected_node.unwrap().entry.interval, node.interval);
         }
     }
 
@@ -251,7 +252,7 @@ mod test {
         // Assert
         assert_eq!(expected.len(), collected.len());
         for (expected_node, node) in expected.into_iter().zip(collected) {
-            assert_eq!(expected_node.entry.interval, node.entry.interval);
+            assert_eq!(expected_node.entry.interval, node.interval);
         }
     }
 
