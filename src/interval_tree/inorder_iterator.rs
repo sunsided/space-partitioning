@@ -1,22 +1,32 @@
+use crate::interval_tree::interval::IntervalType;
 use crate::interval_tree::node::{ChildNode, Node};
 
 #[derive(Debug)]
-enum State<'a, T> {
+enum State<'a, T, D>
+where
+    T: IntervalType,
+{
     Initial,
-    EmitLeft(Box<InorderIterator<'a, T>>),
+    EmitLeft(Box<InorderIterator<'a, T, D>>),
     EmitSelf,
-    EmitRight(Box<InorderIterator<'a, T>>),
+    EmitRight(Box<InorderIterator<'a, T, D>>),
     Done,
 }
 
 #[derive(Debug)]
-pub struct InorderIterator<'a, T> {
-    root: Option<&'a Node<T>>,
-    current_state: State<'a, T>,
+pub struct InorderIterator<'a, T, D>
+where
+    T: IntervalType,
+{
+    root: Option<&'a Node<T, D>>,
+    current_state: State<'a, T, D>,
 }
 
-impl<'a, T> InorderIterator<'a, T> {
-    pub(crate) fn new(root: &'a Node<T>) -> Self {
+impl<'a, T, D> InorderIterator<'a, T, D>
+where
+    T: IntervalType,
+{
+    pub(crate) fn new(root: &'a Node<T, D>) -> Self {
         Self {
             root: Some(root),
             current_state: State::Initial,
@@ -31,8 +41,11 @@ impl<'a, T> InorderIterator<'a, T> {
     }
 }
 
-impl<'a, T: Clone + PartialOrd> Iterator for InorderIterator<'a, T> {
-    type Item = &'a Node<T>;
+impl<'a, T: Clone + PartialOrd, D> Iterator for InorderIterator<'a, T, D>
+where
+    T: IntervalType,
+{
+    type Item = &'a Node<T, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.root.is_none() {
@@ -124,18 +137,20 @@ impl<'a, T: Clone + PartialOrd> Iterator for InorderIterator<'a, T> {
     where
         F: FnMut(Self::Item),
     {
-        fn inorder<'a, T, F>(node: &'a Node<T>, f: &mut F)
+        fn inorder<'a, T, D, F>(node: &'a Node<T, D>, f: &mut F)
         where
-            F: FnMut(&'a Node<T>),
+            F: FnMut(&'a Node<T, D>),
+            T: IntervalType,
         {
             inorder_child(&node.left, f);
             (*f)(node);
             inorder_child(&node.right, f);
         }
 
-        fn inorder_child<'a, T, F>(node: &'a ChildNode<T>, f: &mut F)
+        fn inorder_child<'a, T, D, F>(node: &'a ChildNode<T, D>, f: &mut F)
         where
-            F: FnMut(&'a Node<T>),
+            F: FnMut(&'a Node<T, D>),
+            T: IntervalType,
         {
             if node.is_none() {
                 return;
@@ -152,14 +167,12 @@ impl<'a, T: Clone + PartialOrd> Iterator for InorderIterator<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use crate::interval_tree::node::test::construct_test_root_node;
-    use crate::interval_tree::node::ChildNode;
-    use crate::interval_tree::{InorderIterator, Node};
-    use std::fmt::Debug;
+    use crate::interval_tree::node::{test::construct_test_root_node, ChildNode};
+    use crate::interval_tree::{InorderIterator, IntervalType, Node};
 
     #[test]
     fn size_hint_when_empty_works() {
-        let iter = InorderIterator::<i32>::empty();
+        let iter = InorderIterator::<i32, ()>::empty();
         let (min, max) = iter.size_hint();
         assert_eq!(min, 0);
         assert_eq!(max, None);
@@ -175,7 +188,7 @@ mod test {
 
     #[test]
     fn count_when_empty_works() {
-        let iter = InorderIterator::<i32>::empty();
+        let iter = InorderIterator::<i32, ()>::empty();
         assert_eq!(iter.count(), 0);
     }
 
@@ -192,13 +205,13 @@ mod test {
         let last = root.iter_inorder().last();
         assert!(last.is_some());
         let last = last.unwrap();
-        assert_eq!(last.interval.low, 30);
-        assert_eq!(last.interval.high, 40);
+        assert_eq!(last.entry.interval.low, 30);
+        assert_eq!(last.entry.interval.high, 40);
     }
 
     #[test]
     fn iteration_when_empty_works() {
-        let mut iter = InorderIterator::<i32>::empty();
+        let mut iter = InorderIterator::<i32, ()>::empty();
         assert!(iter.next().is_none());
     }
 
@@ -219,7 +232,7 @@ mod test {
         for node in root.iter_inorder() {
             let expected_node = expected.pop();
             assert!(expected_node.is_some());
-            assert_eq!(expected_node.unwrap().interval, node.interval);
+            assert_eq!(expected_node.unwrap().entry.interval, node.entry.interval);
         }
     }
 
@@ -238,17 +251,23 @@ mod test {
         // Assert
         assert_eq!(expected.len(), collected.len());
         for (expected_node, node) in expected.into_iter().zip(collected) {
-            assert_eq!(expected_node.interval, node.interval);
+            assert_eq!(expected_node.entry.interval, node.entry.interval);
         }
     }
 
-    fn collect_inorder<'a, T: Debug>(node: &'a Node<T>, out: &mut Vec<&'a Node<T>>) {
+    fn collect_inorder<'a, T, D>(node: &'a Node<T, D>, out: &mut Vec<&'a Node<T, D>>)
+    where
+        T: IntervalType,
+    {
         collect_inorder_child(&node.left, out);
         out.push(node);
         collect_inorder_child(&node.right, out);
     }
 
-    fn collect_inorder_child<'a, T: Debug>(node: &'a ChildNode<T>, out: &mut Vec<&'a Node<T>>) {
+    fn collect_inorder_child<'a, T, D>(node: &'a ChildNode<T, D>, out: &mut Vec<&'a Node<T, D>>)
+    where
+        T: IntervalType,
+    {
         if node.is_none() {
             return;
         }

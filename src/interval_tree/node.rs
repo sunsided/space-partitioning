@@ -1,47 +1,145 @@
-use crate::interval_tree::{InorderIterator, Interval};
+use crate::interval_tree::{InorderIterator, Interval, IntervalType};
+use std::fmt::{Debug, Formatter};
 use std::ops::RangeInclusive;
 
+pub struct Entry<T, D>
+where
+    T: IntervalType,
+{
+    pub interval: Interval<T>,
+    pub data: D,
+}
+
+impl<T, D> Debug for Entry<T, D>
+where
+    T: Debug + IntervalType,
+    D: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} data = {:?}", self.interval, self.data)
+    }
+}
+
+impl<T, D> Entry<T, D>
+where
+    T: Clone + IntervalType,
+{
+    pub fn new<I>(interval: I, data: D) -> Self
+    where
+        I: Into<Interval<T>>,
+    {
+        Self {
+            interval: interval.into(),
+            data,
+        }
+    }
+}
+
+impl<I, T, D> From<(I, D)> for Entry<T, D>
+where
+    I: Into<Interval<T>>,
+    T: IntervalType,
+{
+    fn from(pair: (I, D)) -> Self {
+        Self {
+            interval: pair.0.into(),
+            data: pair.1,
+        }
+    }
+}
+
+impl<I, T> From<I> for Entry<T, ()>
+where
+    I: Into<Interval<T>>,
+    T: IntervalType,
+{
+    fn from(value: I) -> Self {
+        Self {
+            interval: value.into(),
+            data: (),
+        }
+    }
+}
+
 /// A child node in the tree.
-pub type ChildNode<T> = Option<Box<Node<T>>>;
+pub type ChildNode<T, D> = Option<Box<Node<T, D>>>;
 
 /// Structure to represent a node in Interval Search Tree.
-pub struct Node<T> {
-    pub interval: Interval<T>,
-    max: T,
-    pub(crate) left: ChildNode<T>,
-    pub(crate) right: ChildNode<T>,
-}
-
-impl<T, const N: usize> From<[RangeInclusive<T>; N]> for Node<T>
+pub struct Node<T, D>
 where
-    T: Clone + PartialOrd,
+    T: IntervalType,
 {
-    fn from(intervals: [RangeInclusive<T>; N]) -> Self {
-        let first_interval = Interval::from(&intervals[0]);
-        let mut root = Node::new(first_interval);
-        for range in intervals.iter().skip(1) {
-            root.insert(Interval::from(range));
+    pub entry: Entry<T, D>,
+    max: T,
+    pub(crate) left: ChildNode<T, D>,
+    pub(crate) right: ChildNode<T, D>,
+}
+
+impl<T, D> From<Entry<T, D>> for Node<T, D>
+where
+    T: Clone + IntervalType,
+{
+    fn from(value: Entry<T, D>) -> Self {
+        Node::new(value)
+    }
+}
+
+impl<I, T, D> std::iter::FromIterator<I> for Node<T, D>
+where
+    I: Into<Entry<T, D>>,
+    T: Clone + IntervalType,
+{
+    fn from_iter<Iter>(iter: Iter) -> Self
+    where
+        Iter: IntoIterator<Item = I>,
+    {
+        let mut root: Option<Node<T, D>> = None;
+        for into_entry in iter.into_iter() {
+            let entry: Entry<T, D> = into_entry.into();
+
+            let new_node = Node::from(entry);
+            if root.is_some() {
+                root.as_mut().unwrap().insert(new_node);
+            } else {
+                root = Some(new_node)
+            }
         }
-        root
+
+        debug_assert!(root.is_some());
+        root.unwrap()
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for Node<T> {
+impl<T: std::fmt::Debug, D> std::fmt::Debug for Node<T, D>
+where
+    T: IntervalType,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} max = {:?}", self.interval, self.max)
+        write!(f, "{:?} max = {:?}", self.entry.interval, self.max)
     }
 }
 
-impl<T: Clone> Node<T> {
+impl<T: Clone, D> Node<T, D>
+where
+    T: IntervalType,
+{
     /// A utility function to create a new Interval Search Tree Node.
-    pub(crate) fn new(interval: Interval<T>) -> Self {
-        let max = interval.high.clone();
+    pub(crate) fn new(entry: Entry<T, D>) -> Self {
+        let max = entry.interval.high.clone();
         Self {
-            interval,
+            entry,
             max,
             left: None,
             right: None,
         }
+    }
+
+    /// A utility function to create a new Interval Search Tree Node.
+    pub(crate) fn new_pair<I>(interval: I, data: D) -> Self
+    where
+        I: Into<Interval<T>>,
+    {
+        Self::new(Entry::new(interval, data))
     }
 
     /// Gets the size of the tree, i.e., the number of intervals stored.
@@ -57,34 +155,59 @@ impl<T: Clone> Node<T> {
     }
 }
 
-impl<T: Clone + PartialOrd<T>> Node<T> {
+impl<T: Clone + PartialOrd<T>> Node<T, ()>
+where
+    T: IntervalType,
+{
+    pub(crate) fn from_ranges_empty<const N: usize>(intervals: [RangeInclusive<T>; N]) -> Self {
+        let mut root: Option<Self> = None;
+        for range in intervals.iter() {
+            let entry = Entry::new(range, ());
+            let new_node = Node::new(entry);
+
+            if root.is_some() {
+                root.as_mut().unwrap().insert(new_node);
+            } else {
+                root = Some(new_node)
+            }
+        }
+
+        debug_assert!(root.is_some());
+        root.unwrap()
+    }
+}
+
+impl<T: Clone + PartialOrd<T>, D> Node<T, D>
+where
+    T: IntervalType,
+{
     /// A utility function to insert a new Interval Search Tree Node
-    pub(crate) fn insert(&mut self, interval: Interval<T>) -> &Self {
+    pub(crate) fn insert(&mut self, node: Node<T, D>) -> &Self {
         // This is similar to BST Insert.  Here the low value of interval
         // is used to maintain BST property
 
         // Get low/high value of interval at root.
-        let low = self.interval.low.clone();
-        let high = self.interval.high.clone();
+        let low = self.entry.interval.low.clone();
+        let high = self.entry.interval.high.clone();
 
         // If root's low value is smaller, then new interval goes to
         // left subtree, otherwise it goes to the right subtree.
-        if interval.low < low {
+        if node.entry.interval.low < low {
             match &mut self.left {
                 Some(left) => {
-                    left.insert(interval);
+                    left.insert(node);
                 }
                 None => {
-                    self.left = Some(Box::new(Self::new(interval)));
+                    self.left = Some(Box::new(node));
                 }
             };
         } else {
             match &mut self.right {
                 Some(right) => {
-                    right.insert(interval);
+                    right.insert(node);
                 }
                 None => {
-                    self.right = Some(Box::new(Self::new(interval)));
+                    self.right = Some(Box::new(node));
                 }
             };
         }
@@ -101,8 +224,8 @@ impl<T: Clone + PartialOrd<T>> Node<T> {
     /// Interval Tree.
     pub(crate) fn overlap_search(&self, interval: Interval<T>) -> Option<Interval<T>> {
         // Check for overlap with root.
-        if self.interval.overlaps_with(&interval) {
-            return Some(self.interval.clone());
+        if self.entry.interval.overlaps_with(&interval) {
+            return Some(self.entry.interval.clone());
         }
 
         // If left child of root is present and max of left child is
@@ -125,7 +248,7 @@ impl<T: Clone + PartialOrd<T>> Node<T> {
     }
 
     /// Iterates the tree in-order, i.e. earlier-starting intervals first.
-    pub(crate) fn iter_inorder(&self) -> InorderIterator<T> {
+    pub(crate) fn iter_inorder(&self) -> InorderIterator<T, D> {
         InorderIterator::new(&self)
     }
 }
@@ -133,10 +256,11 @@ impl<T: Clone + PartialOrd<T>> Node<T> {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
+    use std::iter::FromIterator;
 
     /// Constructs a test tree.
-    pub fn construct_test_root_node() -> Node<i32> {
-        Node::from([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
+    pub fn construct_test_root_node() -> Node<i32, ()> {
+        Node::from_iter([15..=20, 10..=30, 17..=19, 5..=20, 12..=15, 30..=40])
     }
 
     #[test]
