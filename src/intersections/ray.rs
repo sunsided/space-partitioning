@@ -85,17 +85,23 @@ where
         + Default,
 {
     fn intersects(&self, ray: &Ray<Vec2<T>>) -> bool {
-        let tx1 = (self.min.x.clone() - ray.origin.x.clone()) * ray.inv_direction.x.clone();
-        let tx2 = (self.max.x.clone() - ray.origin.x.clone()) * ray.inv_direction.x.clone();
+        let diff_min_x = self.min.x.clone() - ray.origin.x.clone();
+        let diff_max_x = self.max.x.clone() - ray.origin.x.clone();
+        let diff_min_y = self.min.y.clone() - ray.origin.y.clone();
+        let diff_max_y = self.max.y.clone() - ray.origin.y.clone();
 
-        let tmin = tx1.clone().min_(tx2.clone());
-        let tmax = tx1.max_(tx2);
+        let tx1 = diff_min_x * ray.inv_direction.x.clone();
+        let tx2 = diff_max_x * ray.inv_direction.x.clone();
+        let ty1 = diff_min_y * ray.inv_direction.y.clone();
+        let ty2 = diff_max_y * ray.inv_direction.y.clone();
 
-        let ty1 = (self.min.y.clone() - ray.origin.y.clone()) * ray.inv_direction.y.clone();
-        let ty2 = (self.max.y.clone() - ray.origin.y.clone()) * ray.inv_direction.y.clone();
+        let tmin_x = tx1.clone().min_(tx2.clone());
+        let tmax_x = tx1.max_(tx2);
+        let tmin_y = ty1.clone().min_(ty2.clone());
+        let tmax_y = ty1.max_(ty2);
 
-        let tmin = tmin.max_(ty1.clone().min_(ty2.clone()));
-        let tmax = tmax.min_(ty1.max_(ty2));
+        let tmin = tmin_x.max_(tmin_y);
+        let tmax = tmax_x.min_(tmax_y);
 
         tmax >= tmin && tmax >= T::default()
     }
