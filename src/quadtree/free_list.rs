@@ -1,6 +1,4 @@
-use std::cell::Cell;
 use std::mem::ManuallyDrop;
-use std::ops::{Index, IndexMut};
 
 // https://stackoverflow.com/a/48330314/195651
 
@@ -115,11 +113,38 @@ where
         self.first_free = SENTINEL;
     }
 
+    /// Gets a reference to the value at the specified index.
+    ///
+    /// # Safety
+    ///
+    /// If the element at the specified index was erased, the union now acts
+    ///  as a pointer to the next free element. Accessing the same index again after that.
+    ///  is undefined behavior.
+    pub unsafe fn at(&self, index: IndexType) -> &T {
+        assert_ne!(index, SENTINEL);
+        debug_assert!(!self.is_in_free_list(index));
+        &self.data[index as usize].element
+    }
+
+    /// Gets a mutable reference to the value at the specified index.
+    ///
+    /// # Safety
+    ///
+    /// If the element at the specified index was erased, the union now acts
+    /// as a pointer to the next free element. Accessing the same index again after that.
+    /// is undefined behavior.
+    pub unsafe fn at_mut(&mut self, index: IndexType) -> &mut T {
+        assert_ne!(index, SENTINEL);
+        debug_assert!(!self.is_in_free_list(index));
+        &mut self.data[index as usize].element
+    }
+
     /// Gets the current capacity of the list.
     pub fn capacity(&self) -> usize {
         self.data.len()
     }
 
+    #[cfg(any(debug_assertions, test))]
     fn is_in_free_list(&self, n: IndexType) -> bool {
         assert_ne!(n, SENTINEL);
         let mut token = self.first_free;
@@ -142,35 +167,11 @@ where
     }
 }
 
-impl<T> Index<IndexType> for FreeList<T>
-where
-    T: Default,
-{
-    type Output = T;
-
-    fn index(&self, index: IndexType) -> &Self::Output {
-        assert_ne!(index, SENTINEL);
-        debug_assert!(!self.is_in_free_list(index));
-        unsafe { &self.data[index as usize].element }
-    }
-}
-
-impl<T> IndexMut<IndexType> for FreeList<T>
-where
-    T: Default,
-{
-    fn index_mut(&mut self, index: IndexType) -> &mut Self::Output {
-        assert_ne!(index, SENTINEL);
-        debug_assert!(!self.is_in_free_list(index));
-        unsafe { &mut self.data[index as usize].element }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Default, Debug, PartialEq, PartialOrd)]
     struct Complex(f64, f64);
 
     impl Drop for Complex {
@@ -182,7 +183,7 @@ mod test {
 
     #[test]
     fn after_construction_has_no_first_free() {
-        let mut list = FreeList::<Complex>::default();
+        let list = FreeList::<Complex>::default();
         assert_eq!(list.first_free, SENTINEL);
         assert_eq!(list.capacity(), 0);
     }
@@ -282,5 +283,39 @@ mod test {
         list.clear();
         assert_eq!(list.first_free, SENTINEL);
         assert_eq!(list.capacity(), 0);
+    }
+
+    #[test]
+    fn is_in_free_list_works() {
+        let mut list = FreeList::<Complex>::default();
+        list.insert(Complex::default());
+        list.insert(Complex::default());
+        list.erase(0);
+        assert!(list.is_in_free_list(0));
+        assert!(!list.is_in_free_list(1));
+    }
+
+    #[test]
+    fn at_works() {
+        let mut list = FreeList::<Complex>::default();
+        list.insert(Complex(1., 2.));
+        list.insert(Complex::default());
+        let element = unsafe { list.at(0) };
+        assert_eq!(*element, Complex(1., 2.));
+    }
+
+    #[test]
+    fn at_mut_works() {
+        let mut list = FreeList::<Complex>::default();
+        list.insert(Complex(1., 2.));
+        list.insert(Complex::default());
+
+        // Mutably access the element and exchange it.
+        let element = unsafe { list.at_mut(0) };
+        *element = Complex::default();
+
+        // Get a new reference and verify.
+        let element = unsafe { list.at(0) };
+        assert_eq!(*element, Complex(0., 0.));
     }
 }
