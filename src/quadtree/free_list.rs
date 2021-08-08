@@ -2,8 +2,8 @@ use std::mem::ManuallyDrop;
 
 // https://stackoverflow.com/a/48330314/195651
 
-type IndexType = u32;
-const SENTINEL: IndexType = IndexType::MAX;
+pub(crate) type IndexType = u32;
+pub(crate) const SENTINEL: IndexType = IndexType::MAX;
 
 /// Provides an indexed free list with constant-time removals from anywhere
 /// in the list without invalidating indices. T must be trivially constructible
