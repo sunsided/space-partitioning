@@ -145,17 +145,14 @@ impl QuadTree {
                 // Only here to assist the IDE in determining the type.
                 let leaf: NodeData = leaf;
 
-                let node_index = leaf.index;
                 let (element_count, first_child_or_element) = {
-                    let node = self.nodes[node_index as usize];
+                    let node = self.nodes[leaf.index as usize];
                     debug_assert!(node.is_leaf());
                     (node.element_count, node.first_child_or_element)
                 };
 
                 // Do not subdivide node if after subdivision cells would be less than the smallest size.
-                let can_split_width = leaf.crect[2] >= (SMALLEST_CELL_SIZE * 2);
-                let can_split_height = leaf.crect[3] >= (SMALLEST_CELL_SIZE * 2);
-                let can_split = can_split_width || can_split_height;
+                let can_split = leaf.can_split(SMALLEST_CELL_SIZE);
 
                 // Determine if the node must store an element (or should subdivide).
                 let node_is_full = element_count >= MAX_NUM_ELEMENTS;
@@ -167,7 +164,7 @@ impl QuadTree {
                         element: element_index,
                         next: first_child_or_element,
                     });
-                    let node = &mut self.nodes[node_index as usize];
+                    let node = &mut self.nodes[leaf.index as usize];
                     node.first_child_or_element = element_node_index;
                     node.element_count += 1;
                     return;
@@ -176,106 +173,107 @@ impl QuadTree {
                 // Split the node
                 debug_assert_eq!(MAX_NUM_ELEMENTS, 1);
 
-                // Create or recycle child nodes.
-                let first_child_index = if self.free_node == free_list::SENTINEL {
-                    // TODO: push back to node array
-                    let node_index = self.nodes.len() as IndexType;
-                    for _ in 0..4 {
-                        self.nodes.push(Node::default());
-                    }
-                    node_index
-                } else {
-                    // TODO: overwrite node at free head
-                    // TODO: set free head to node[free_head]
-                    let node_index = self.free_node;
-                    let next_free_node = self.nodes[node_index as usize].first_child_or_element;
-                    self.nodes[node_index as usize] = Node::default();
-                    self.free_node = next_free_node;
-                    node_index
-                };
-
-                // Mutably get the node we need to convert to a branch.
-                let node = &mut self.nodes[node_index as usize];
-
-                // Get the head of the list pointing to the elements.
-                let mut element_ptr = node.get_first_element_node_index();
-
-                // Convert this node to a branch.
-                node.make_branch(first_child_index);
-                debug_assert!(node.is_branch());
-
-                // Get the boundaries of the leaf.
-                let mx = leaf.crect[0];
-                let my = leaf.crect[1];
-                let hx = leaf.crect[2] >> 1;
-                let hy = leaf.crect[3] >> 1;
-
-                // TODO: Distribute all existing elements ...
-                while element_ptr != free_list::SENTINEL {
-                    let current_element_node = unsafe { *self.element_nodes.at(element_ptr) };
-                    let current_element = unsafe { self.elements.at(current_element_node.element) };
-
-                    if current_element.y1 <= my {
-                        if current_element.x1 <= mx {
-                            let top_left = &mut self.nodes[(first_child_index + 0) as usize];
-                            let element_node_index =
-                                self.element_nodes.insert(QuadTreeElementNode {
-                                    element: current_element_node.element,
-                                    next: top_left.first_child_or_element,
-                                });
-                            top_left.first_child_or_element = element_node_index;
-                            top_left.element_count += 1;
-                        }
-
-                        if current_element.x2 > mx {
-                            let top_right = &mut self.nodes[(first_child_index + 1) as usize];
-                            let element_node_index =
-                                self.element_nodes.insert(QuadTreeElementNode {
-                                    element: current_element_node.element,
-                                    next: top_right.first_child_or_element,
-                                });
-                            top_right.first_child_or_element = element_node_index;
-                            top_right.element_count += 1;
-                        }
-                    }
-
-                    if current_element.y2 > my {
-                        if current_element.x1 <= mx {
-                            let bottom_left = &mut self.nodes[(first_child_index + 2) as usize];
-                            let element_node_index =
-                                self.element_nodes.insert(QuadTreeElementNode {
-                                    element: current_element_node.element,
-                                    next: bottom_left.first_child_or_element,
-                                });
-                            bottom_left.first_child_or_element = element_node_index;
-                            bottom_left.element_count += 1;
-                        }
-
-                        if current_element.x2 > mx {
-                            let bottom_right = &mut self.nodes[(first_child_index + 3) as usize];
-                            let element_node_index =
-                                self.element_nodes.insert(QuadTreeElementNode {
-                                    element: current_element_node.element,
-                                    next: bottom_right.first_child_or_element,
-                                });
-                            bottom_right.first_child_or_element = element_node_index;
-                            bottom_right.element_count += 1;
-                        }
-                    }
-
-                    // The element was assigned to the child nodes - it can be removed from the
-                    // former branch.
-                    self.element_nodes.erase(element_ptr);
-
-                    // Move to the next element in the list.
-                    element_ptr = current_element_node.next;
-                }
+                self.distribute_elements_to_child_nodes(&leaf);
 
                 // At this point we have only split the current node but must still
                 // insert the new item. To do this we use the former leaf node as a
                 // starting point and restart a search from there.
                 to_process.push(leaf);
             }
+        }
+    }
+
+    fn distribute_elements_to_child_nodes(&mut self, leaf: &NodeData) {
+        // Create or recycle child nodes.
+        let first_child_index = if self.free_node == free_list::SENTINEL {
+            let node_index = self.nodes.len() as IndexType;
+            for _ in 0..4 {
+                self.nodes.push(Node::default());
+            }
+            node_index
+        } else {
+            let node_index = self.free_node;
+            let next_free_node = self.nodes[node_index as usize].first_child_or_element;
+            self.nodes[node_index as usize] = Node::default();
+            self.free_node = next_free_node;
+            node_index
+        };
+
+        // Mutably get the node we need to convert to a branch.
+        let node = &mut self.nodes[leaf.index as usize];
+
+        // Get the head of the list pointing to the elements.
+        let mut element_ptr = node.get_first_element_node_index();
+
+        // Convert this node to a branch.
+        node.make_branch(first_child_index);
+        debug_assert!(node.is_branch());
+
+        // Get the boundaries of the leaf.
+        let mx = leaf.crect[0];
+        let my = leaf.crect[1];
+
+        // For each element in the list ...
+        while element_ptr != free_list::SENTINEL {
+            let current_element_node = unsafe { *self.element_nodes.at(element_ptr) };
+            let current_element = unsafe { self.elements.at(current_element_node.element) };
+
+            // If the top of the element is north of the center, we must register it there.
+            if current_element.y1 <= my {
+                // If the left of the element is west of the center, we must register it there.
+                if current_element.x1 <= mx {
+                    let top_left = &mut self.nodes[(first_child_index + 0) as usize];
+                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
+                        element: current_element_node.element,
+                        next: top_left.first_child_or_element,
+                    });
+                    top_left.first_child_or_element = element_node_index;
+                    top_left.element_count += 1;
+                }
+
+                // If the right of the element is east of the center, we must also register it there.
+                if current_element.x2 > mx {
+                    let top_right = &mut self.nodes[(first_child_index + 1) as usize];
+                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
+                        element: current_element_node.element,
+                        next: top_right.first_child_or_element,
+                    });
+                    top_right.first_child_or_element = element_node_index;
+                    top_right.element_count += 1;
+                }
+            }
+
+            // If the bottom of the element is south of the center, we must also register it there.
+            if current_element.y2 > my {
+                // If the left of the element is west of the center, we must register it there.
+                if current_element.x1 <= mx {
+                    let bottom_left = &mut self.nodes[(first_child_index + 2) as usize];
+                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
+                        element: current_element_node.element,
+                        next: bottom_left.first_child_or_element,
+                    });
+                    bottom_left.first_child_or_element = element_node_index;
+                    bottom_left.element_count += 1;
+                }
+
+                // If the right of the element is east of the center, we must also register it there.
+                if current_element.x2 > mx {
+                    let bottom_right = &mut self.nodes[(first_child_index + 3) as usize];
+                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
+                        element: current_element_node.element,
+                        next: bottom_right.first_child_or_element,
+                    });
+                    bottom_right.first_child_or_element = element_node_index;
+                    bottom_right.element_count += 1;
+                }
+            }
+
+            // The element was assigned to the child nodes - it can be removed from the
+            // former branch.
+            self.element_nodes.erase(element_ptr);
+
+            // Move to the next element in the list.
+            element_ptr = current_element_node.next;
         }
     }
 
