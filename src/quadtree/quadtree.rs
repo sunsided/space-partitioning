@@ -92,9 +92,9 @@ impl Default for QuadRect {
 
 impl QuadTreeElement {
     fn to_array(&self) -> [i32; 4] {
-        let hx = self.x2 - self.x1;
-        let hy = self.y2 - self.y1;
-        [self.x1, self.y1, hx, hy]
+        // TODO: see other TODO about splitting elements into separate coordinate and data structs
+        //       Since we are extracting only the coordinates here, this could help.
+        [self.x1, self.y1, self.x2, self.y2]
     }
 }
 
@@ -131,11 +131,10 @@ impl QuadTree {
             let node_data = to_process.pop().unwrap();
 
             // Find the leaves // TODO: Doesn't seem to work for center rect example
-            let leaves = self.find_leaves_from_root(node_data, element_coords.clone());
+            let mut leaves = self.find_leaves_from_root(node_data, element_coords.clone());
 
-            for leaf in leaves.into_iter() {
-                // Only here to assist the IDE in determining the type.
-                let leaf: NodeData = leaf;
+            while !leaves.is_empty() {
+                let leaf = leaves.pop_back();
 
                 let (element_count, first_child_or_element) = {
                     let node = &self.nodes[leaf.index as usize];
@@ -292,16 +291,20 @@ impl QuadTree {
             let r = mx + hx;
             let b = my + hy;
 
+            // TODO: Inserting a very large element over many very small ones could yield a lot of nodes.
             if rect[1] <= my {
                 if rect[0] <= mx {
                     to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
-                } else {
+                }
+                if rect[2] > mx {
                     to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
                 }
-            } else {
+            }
+            if rect[3] > my {
                 if rect[0] <= mx {
                     to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
-                } else {
+                }
+                if rect[2] > mx {
                     to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
                 }
             }
@@ -499,20 +502,37 @@ mod test {
             y1: -5,
             y2: 5,
         });
-        assert!(tree.count_element_references() >= 5);
 
+        // The depth of 1 limits the tree to four quadrants.
+        // Each of the first four elements creates a single reference
+        // in each of the quadrants. The "center" element covers
+        // all four of them, and therefore adds another four references.
+        assert_eq!(tree.count_element_references(), 8);
+
+        // Select the top-left quadrant
         let quadrant_tl = [-20, -20, 0, 0];
-
         let results = tree.find_leaves_from_root(tree.get_root_node_data(), quadrant_tl);
+
+        // Only one node matches - the one resembling the top-left quadrant.
+        assert_eq!(results.len(), 1);
+
+        // The top-left quadrant has two elements, namely #1000 and #4000.
         let first = tree.nodes[results[0].index as usize];
         assert_eq!(first.element_count, 2);
 
+        // Since the linked list of elements is build as a stack, the
+        // top element is the last one inserted, which is #4000.
         let elem_node_a = unsafe { tree.element_nodes.at(first.first_child_or_element) };
         let elem_a = unsafe { tree.elements.at(elem_node_a.element) };
+        assert_eq!(elem_a.id, 4000);
 
+        // The next element in the list is the one that was inserted first,
+        // namely #1000.
         let elem_node_b = unsafe { tree.element_nodes.at(elem_node_a.next) };
         let elem_b = unsafe { tree.elements.at(elem_node_b.element) };
+        assert_eq!(elem_b.id, 1000);
 
+        // Since there were only two elements, the next one is the sentinel.
         assert_eq!(elem_node_b.next, free_list::SENTINEL);
 
         todo!("find")

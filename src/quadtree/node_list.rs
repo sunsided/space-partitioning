@@ -15,6 +15,10 @@ impl NodeList {
         self.elements.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.elements.is_empty()
+    }
+
     pub fn pop_back(&mut self) -> NodeData {
         debug_assert!(!self.elements.is_empty());
         self.elements.pop().unwrap()
