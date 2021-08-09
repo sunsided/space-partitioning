@@ -22,6 +22,7 @@ impl NodeData {
         }
     }
 
+    #[inline]
     pub fn new_from_root(root_rect: &QuadRect) -> Self {
         Self::new(root_rect.l, root_rect.t, root_rect.hx, root_rect.hy, 0, 0)
     }

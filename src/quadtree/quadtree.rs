@@ -116,28 +116,6 @@ impl QuadTree {
         }
     }
 
-    /// Counts the total number of references. This number should be at least
-    /// the number of elements inserted; it will be higher if elements
-    /// span multiple cells.
-    fn count_element_references(&self) -> usize {
-        let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
-        let mut count = 0usize;
-        while !to_process.is_empty() {
-            let index = to_process.pop().unwrap();
-            let node = &self.nodes[index];
-            if node.is_branch() {
-                for j in 0..4 {
-                    to_process.push((node.first_child_or_element + j) as usize);
-                }
-            } else {
-                count += node.element_count as usize;
-            }
-        }
-
-        debug_assert!(count >= self.elements.debug_len());
-        count
-    }
-
     fn insert(&mut self, element: QuadTreeElement) {
         assert!(self.root_rect.contains(&element));
 
@@ -147,12 +125,12 @@ impl QuadTree {
         let element_index = self.elements.insert(element);
 
         let mut to_process: SmallVec<[NodeData; 128]> =
-            smallvec::smallvec![NodeData::new_from_root(&self.root_rect)];
+            smallvec::smallvec![self.get_root_node_data()];
 
         while !to_process.is_empty() {
             let node_data = to_process.pop().unwrap();
 
-            // Find the leaves
+            // Find the leaves // TODO: Doesn't seem to work for center rect example
             let leaves = self.find_leaves_from_root(node_data, element_coords.clone());
 
             for leaf in leaves.into_iter() {
@@ -289,11 +267,6 @@ impl QuadTree {
         // TODO: Set free_head to removed node index
     }
 
-    fn find_leaves(&self, rect: [i32; 4]) -> NodeList {
-        let root_data = NodeData::new_from_root(&self.root_rect);
-        self.find_leaves_from_root(root_data, rect)
-    }
-
     fn find_leaves_from_root(&self, root: NodeData, rect: [i32; 4]) -> NodeList {
         let mut leaves = NodeList::default();
         let mut to_process = NodeList::default();
@@ -383,6 +356,33 @@ impl QuadTree {
             }
         }
     }
+
+    /// Counts the total number of references. This number should be at least
+    /// the number of elements inserted; it will be higher if elements
+    /// span multiple cells.
+    fn count_element_references(&self) -> usize {
+        let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
+        let mut count = 0usize;
+        while !to_process.is_empty() {
+            let index = to_process.pop().unwrap();
+            let node = &self.nodes[index];
+            if node.is_branch() {
+                for j in 0..4 {
+                    to_process.push((node.first_child_or_element + j) as usize);
+                }
+            } else {
+                count += node.element_count as usize;
+            }
+        }
+
+        debug_assert!(count >= self.elements.debug_len());
+        count
+    }
+
+    #[inline]
+    fn get_root_node_data(&self) -> NodeData {
+        NodeData::new_from_root(&self.root_rect)
+    }
 }
 
 #[cfg(test)]
@@ -448,5 +448,73 @@ mod test {
         }
         assert_eq!(tree.count_element_references(), count as usize);
         let tree = tree;
+    }
+
+    #[test]
+    fn find_works() {
+        let quad_rect = QuadRect {
+            l: -20,
+            t: -20,
+            hx: 40,
+            hy: 40,
+        };
+        let mut tree = QuadTree::new(quad_rect, 1);
+        // top-left
+        tree.insert(QuadTreeElement {
+            id: 1000,
+            x1: -15,
+            y1: -15,
+            x2: -5,
+            y2: -5,
+        });
+        // top-right
+        tree.insert(QuadTreeElement {
+            id: 2000,
+            x1: 5,
+            y1: -15,
+            x2: 15,
+            y2: -5,
+        });
+        // bottom-left
+        tree.insert(QuadTreeElement {
+            id: 3000,
+            x1: -15,
+            y1: 5,
+            x2: -5,
+            y2: 15,
+        });
+        // bottom-right
+        tree.insert(QuadTreeElement {
+            id: 3000,
+            x1: 5,
+            y1: 5,
+            x2: 15,
+            y2: 15,
+        });
+        // center
+        tree.insert(QuadTreeElement {
+            id: 4000,
+            x1: -5,
+            x2: 5,
+            y1: -5,
+            y2: 5,
+        });
+        assert!(tree.count_element_references() >= 5);
+
+        let quadrant_tl = [-20, -20, 0, 0];
+
+        let results = tree.find_leaves_from_root(tree.get_root_node_data(), quadrant_tl);
+        let first = tree.nodes[results[0].index as usize];
+        assert_eq!(first.element_count, 2);
+
+        let elem_node_a = unsafe { tree.element_nodes.at(first.first_child_or_element) };
+        let elem_a = unsafe { tree.elements.at(elem_node_a.element) };
+
+        let elem_node_b = unsafe { tree.element_nodes.at(elem_node_a.next) };
+        let elem_b = unsafe { tree.elements.at(elem_node_b.element) };
+
+        assert_eq!(elem_node_b.next, free_list::SENTINEL);
+
+        todo!("find")
     }
 }

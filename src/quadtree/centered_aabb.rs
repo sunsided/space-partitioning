@@ -51,6 +51,7 @@ pub trait FromLeftTopWidthHeight<T> {
 }
 
 impl FromLeftTopWidthHeight<i32> for CenteredAABB<i32> {
+    #[inline]
     fn from_ltwh(left: i32, top: i32, width: i32, height: i32) -> Self {
         let mx = left + (width >> 1);
         let my = top + (height >> 1);
@@ -59,6 +60,7 @@ impl FromLeftTopWidthHeight<i32> for CenteredAABB<i32> {
 }
 
 impl FromLeftTopWidthHeight<f32> for CenteredAABB<f32> {
+    #[inline]
     fn from_ltwh(left: f32, top: f32, width: f32, height: f32) -> Self {
         let mx = left + (width * 0.5f32);
         let my = top + (height * 0.5f32);

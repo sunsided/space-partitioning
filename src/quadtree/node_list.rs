@@ -1,4 +1,5 @@
 use crate::quadtree::node_data::NodeData;
+use std::ops::Index;
 
 #[derive(Default)]
 pub struct NodeList {
@@ -17,6 +18,14 @@ impl NodeList {
     pub fn pop_back(&mut self) -> NodeData {
         debug_assert!(!self.elements.is_empty());
         self.elements.pop().unwrap()
+    }
+}
+
+impl Index<usize> for NodeList {
+    type Output = NodeData;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.elements[index]
     }
 }
 
