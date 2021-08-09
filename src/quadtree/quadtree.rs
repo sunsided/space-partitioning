@@ -8,9 +8,12 @@ use smallvec::SmallVec;
 
 /// Represents an element in the QuadTree.
 #[derive(Debug, PartialEq, Eq, Default)]
-pub struct QuadTreeElement {
+pub struct QuadTreeElement<Id = u32>
+where
+    Id: Default,
+{
     /// Stores the ID for the element (can be used to refer to external data).
-    pub id: u32,
+    pub id: Id,
     /// Left X coordinate of the rectangle of the element.
     pub x1: i32,
     /// Top Y coordinate of the rectangle of the element.
@@ -36,10 +39,13 @@ struct QuadTreeElementNode {
     element: free_list::IndexType,
 }
 
-pub struct QuadTree {
+pub struct QuadTree<Id = u32>
+where
+    Id: Default,
+{
     /// Stores all the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
-    elements: FreeList<QuadTreeElement>,
+    elements: FreeList<QuadTreeElement<Id>>,
     /// Stores all the element nodes in the quadtree.
     /// For each cell occupied by a `QuadTreeElement`, we store
     /// a `QuadTreeElementNode`.
