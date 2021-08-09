@@ -2,10 +2,11 @@ use crate::quadtree::quad_rect::QuadRect;
 
 pub type NodeIndexType = u32;
 
+#[derive(Debug)]
 pub struct NodeData {
     /// The index of the `Node` described by this `NodeData` instance.
     pub index: NodeIndexType,
-    /// The rectangle of the node, center x, center y, width and height.
+    /// The centered AABB of the the node: center x, center y, width and height.
     pub crect: [i32; 4],
     /// The depth of the node.
     pub depth: u32,

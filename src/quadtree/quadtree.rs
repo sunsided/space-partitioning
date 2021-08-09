@@ -6,8 +6,14 @@ use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
 use smallvec::SmallVec;
 
+/// Each node must have less than the maximum allowed number of elements.
+const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tree
+
+/// We use this value to determine whether a node can be split.
+const SMALLEST_CELL_SIZE: i32 = 1; // TODO: Make parameter of tree
+
 /// Represents an element in the QuadTree.
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct QuadTreeElement<Id = u32>
 where
     Id: Default,
@@ -134,12 +140,6 @@ impl QuadTree {
     fn insert(&mut self, element: QuadTreeElement) {
         assert!(self.root_rect.contains(&element));
 
-        // Each node must have less than the maximum allowed number of elements.
-        const MAX_NUM_ELEMENTS: NodeElementCountType = 1;
-
-        // We use this value to determine whether a node can be split.
-        const SMALLEST_CELL_SIZE: i32 = 1;
-
         let element_coords = element.to_array();
 
         // Insert the actual element.
@@ -214,7 +214,7 @@ impl QuadTree {
         let node = &mut self.nodes[leaf.index as usize];
 
         // Get the head of the list pointing to the elements.
-        let mut element_ptr = node.get_first_element_node_index();
+        let mut element_node_index = node.get_first_element_node_index();
 
         // Convert this node to a branch.
         node.make_branch(first_child_index);
@@ -225,32 +225,20 @@ impl QuadTree {
         let my = leaf.crect[1];
 
         // For each element in the list ...
-        while element_ptr != free_list::SENTINEL {
-            let current_element_node = unsafe { *self.element_nodes.at(element_ptr) };
-            let current_element = unsafe { self.elements.at(current_element_node.element) };
+        while element_node_index != free_list::SENTINEL {
+            let current_element_node = unsafe { *self.element_nodes.at(element_node_index) };
+            let current_element = unsafe { *self.elements.at(current_element_node.element) };
 
             // If the top of the element is north of the center, we must register it there.
             if current_element.y1 <= my {
                 // If the left of the element is west of the center, we must register it there.
                 if current_element.x1 <= mx {
-                    let top_left = &mut self.nodes[(first_child_index + 0) as usize];
-                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-                        element: current_element_node.element,
-                        next: top_left.first_child_or_element,
-                    });
-                    top_left.first_child_or_element = element_node_index;
-                    top_left.element_count += 1;
+                    self.insert_child_node(first_child_index + 0, current_element_node.element);
                 }
 
                 // If the right of the element is east of the center, we must also register it there.
                 if current_element.x2 > mx {
-                    let top_right = &mut self.nodes[(first_child_index + 1) as usize];
-                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-                        element: current_element_node.element,
-                        next: top_right.first_child_or_element,
-                    });
-                    top_right.first_child_or_element = element_node_index;
-                    top_right.element_count += 1;
+                    self.insert_child_node(first_child_index + 1, current_element_node.element);
                 }
             }
 
@@ -258,34 +246,32 @@ impl QuadTree {
             if current_element.y2 > my {
                 // If the left of the element is west of the center, we must register it there.
                 if current_element.x1 <= mx {
-                    let bottom_left = &mut self.nodes[(first_child_index + 2) as usize];
-                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-                        element: current_element_node.element,
-                        next: bottom_left.first_child_or_element,
-                    });
-                    bottom_left.first_child_or_element = element_node_index;
-                    bottom_left.element_count += 1;
+                    self.insert_child_node(first_child_index + 2, current_element_node.element);
                 }
 
                 // If the right of the element is east of the center, we must also register it there.
                 if current_element.x2 > mx {
-                    let bottom_right = &mut self.nodes[(first_child_index + 3) as usize];
-                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-                        element: current_element_node.element,
-                        next: bottom_right.first_child_or_element,
-                    });
-                    bottom_right.first_child_or_element = element_node_index;
-                    bottom_right.element_count += 1;
+                    self.insert_child_node(first_child_index + 3, current_element_node.element);
                 }
             }
 
             // The element was assigned to the child nodes - it can be removed from the
             // former branch.
-            self.element_nodes.erase(element_ptr);
+            self.element_nodes.erase(element_node_index);
 
             // Move to the next element in the list.
-            element_ptr = current_element_node.next;
+            element_node_index = current_element_node.next;
         }
+    }
+
+    fn insert_child_node(&mut self, child_index: u32, element: free_list::IndexType) {
+        let node = &mut self.nodes[child_index as usize];
+        let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
+            element,
+            next: node.first_child_or_element,
+        });
+        node.first_child_or_element = element_node_index;
+        node.element_count += 1;
     }
 
     fn remove(&mut self, node: NodeData) {
