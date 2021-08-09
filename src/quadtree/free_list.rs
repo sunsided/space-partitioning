@@ -218,8 +218,7 @@ mod test {
     #[test]
     fn first_free_points_to_last_freed_index() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 2);
         list.erase(0);
         list.erase(1);
         assert_eq!(list.first_free, 1);
@@ -229,10 +228,7 @@ mod test {
     #[test]
     fn erase_in_ascending_order() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 4);
         list.erase(0);
         list.erase(1);
         list.erase(2);
@@ -244,10 +240,7 @@ mod test {
     #[test]
     fn erase_in_descending_order() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 4);
         list.erase(3);
         list.erase(2);
         list.erase(1);
@@ -259,10 +252,7 @@ mod test {
     #[test]
     fn erase_in_mixed_order() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 4);
         list.erase(0);
         list.erase(3);
         list.erase(1);
@@ -274,10 +264,7 @@ mod test {
     #[test]
     fn clear_works() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 4);
         list.erase(1);
         list.clear();
         list.clear();
@@ -288,8 +275,7 @@ mod test {
     #[test]
     fn is_in_free_list_works() {
         let mut list = FreeList::<Complex>::default();
-        list.insert(Complex::default());
-        list.insert(Complex::default());
+        insert_some(&mut list, 2);
         list.erase(0);
         assert!(list.is_in_free_list(0));
         assert!(!list.is_in_free_list(1));
@@ -317,5 +303,11 @@ mod test {
         // Get a new reference and verify.
         let element = unsafe { list.at(0) };
         assert_eq!(*element, Complex(0., 0.));
+    }
+
+    fn insert_some(list: &mut FreeList<Complex>, n: usize) {
+        for _ in 0..n {
+            list.insert(Complex::default());
+        }
     }
 }
