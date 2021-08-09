@@ -49,11 +49,18 @@ impl Debug for Node {
 }
 
 impl Default for Node {
+    #[inline]
     fn default() -> Self {
-        Self {
+        let node = Self {
+            // By setting the first element index to the sentinel value,
+            // we encode that this node has no data.
             first_child_or_element: free_list::SENTINEL,
+            // By setting the element count to zero, this is now a leaf with 0 elements.
             element_count: 0,
-        }
+        };
+        // For brevity:
+        debug_assert!(node.is_leaf() && node.is_empty());
+        node
     }
 }
 
@@ -65,13 +72,24 @@ impl Node {
     }
 
     /// Determines whether this node is a branch.
+    ///
+    /// Leaf nodes do not contain data, and their [`first_child_or_element`]
+    /// field points to the index of the child node.
     #[inline]
     pub fn is_branch(&self) -> bool {
         self.element_count == NODE_IS_BRANCH
     }
 
+    /// Determines whether this node is a leaf (i.e., not a branch).
+    ///
+    /// Leaf nodes may contain data, and their [`first_child_or_element`]
+    /// field points to the index of the first element.
     #[inline]
     pub fn is_leaf(&self) -> bool {
+        // If we have a nonzero element count, the [`first_child_or_element`] must be a valid index.
+        // If we have a zero element count, the [`first_child_or_element`] must be the sentinel value.
+        debug_assert!(self.element_count > 0 || self.first_child_or_element == free_list::SENTINEL);
+
         !self.is_branch()
     }
 
@@ -86,17 +104,18 @@ impl Node {
     #[inline]
     pub fn get_first_element_node_index(&self) -> free_list::IndexType {
         debug_assert!(self.is_leaf());
-        debug_assert!(self.element_count > 0 || self.first_child_or_element == free_list::SENTINEL);
         self.first_child_or_element
     }
 
     /// Make this node an empty leaf.
+    #[inline]
     pub fn make_empty_leaf(&mut self) {
         self.first_child_or_element = free_list::SENTINEL;
         self.element_count = 0;
     }
 
     /// Make this node a branch.
+    #[inline]
     pub fn make_branch(&mut self, first_child: free_list::IndexType) {
         self.first_child_or_element = first_child;
         self.element_count = NODE_IS_BRANCH;
