@@ -16,6 +16,9 @@ where
     /// The index of the the most recently freed element, or `SENTINEL` if no
     /// element is free.
     first_free: IndexType,
+    /// The number of live elements in the list.
+    #[cfg(debug_assertions)]
+    length: usize,
 }
 
 union FreeElement<T> {
@@ -34,6 +37,8 @@ where
         Self {
             data: Vec::default(),
             first_free: SENTINEL,
+            #[cfg(debug_assertions)]
+            length: 0,
         }
     }
 }
@@ -44,6 +49,11 @@ where
 {
     /// Inserts an element to the free list and returns an index to it.
     pub fn insert(&mut self, element: T) -> IndexType {
+        #[cfg(debug_assertions)]
+        {
+            self.length += 1;
+        }
+
         return if self.first_free != SENTINEL {
             let index = self.first_free;
 
@@ -68,12 +78,16 @@ where
         if self.data.is_empty() {
             return;
         }
-
-        debug_assert!(!self.is_in_free_list(n));
+        debug_assert!(!self.debug_is_in_free_list(n));
 
         unsafe { ManuallyDrop::drop(&mut self.data[n as usize].element) };
         self.data[n as usize].next = self.first_free;
         self.first_free = n;
+
+        #[cfg(debug_assertions)]
+        {
+            self.length -= 1;
+        }
     }
 
     /// Removes all elements from the free list.
@@ -111,6 +125,11 @@ where
         // list can be trivially cleared.
         self.data.clear();
         self.first_free = SENTINEL;
+
+        #[cfg(debug_assertions)]
+        {
+            self.length = 0;
+        }
     }
 
     /// Gets a reference to the value at the specified index.
@@ -122,7 +141,7 @@ where
     ///  is undefined behavior.
     pub unsafe fn at(&self, index: IndexType) -> &T {
         assert_ne!(index, SENTINEL);
-        debug_assert!(!self.is_in_free_list(index));
+        debug_assert!(!self.debug_is_in_free_list(index));
         &self.data[index as usize].element
     }
 
@@ -135,7 +154,7 @@ where
     /// is undefined behavior.
     pub unsafe fn at_mut(&mut self, index: IndexType) -> &mut T {
         assert_ne!(index, SENTINEL);
-        debug_assert!(!self.is_in_free_list(index));
+        debug_assert!(!self.debug_is_in_free_list(index));
         &mut self.data[index as usize].element
     }
 
@@ -144,17 +163,30 @@ where
         self.data.len()
     }
 
-    #[cfg(any(debug_assertions, test))]
-    fn is_in_free_list(&self, n: IndexType) -> bool {
-        assert_ne!(n, SENTINEL);
-        let mut token = self.first_free;
-        while token != SENTINEL {
-            if n == token {
-                return true;
+    /// Gets the number of elements in the list.
+
+    pub fn debug_len(&self) -> usize {
+        #[cfg(debug_assertions)]
+        return self.length;
+        #[cfg(not(debug_assertions))]
+        unimplemented!()
+    }
+
+    fn debug_is_in_free_list(&self, n: IndexType) -> bool {
+        #[cfg(any(debug_assertions, test))]
+        {
+            assert_ne!(n, SENTINEL);
+            let mut token = self.first_free;
+            while token != SENTINEL {
+                if n == token {
+                    return true;
+                }
+                token = unsafe { self.data[token as usize].next };
             }
-            token = unsafe { self.data[token as usize].next };
+            return false;
         }
-        return false;
+        #[cfg(not(any(debug_assertions, test)))]
+        unimplemented!()
     }
 }
 
@@ -277,8 +309,8 @@ mod test {
         let mut list = FreeList::<Complex>::default();
         insert_some(&mut list, 2);
         list.erase(0);
-        assert!(list.is_in_free_list(0));
-        assert!(!list.is_in_free_list(1));
+        assert!(list.debug_is_in_free_list(0));
+        assert!(!list.debug_is_in_free_list(1));
     }
 
     #[test]

@@ -109,6 +109,9 @@ impl QuadTree {
         }
     }
 
+    /// Counts the total number of references. This number should be at least
+    /// the number of elements inserted; it will be higher if elements
+    /// span multiple cells.
     fn count_element_references(&self) -> usize {
         let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
         let mut count = 0usize;
@@ -123,6 +126,8 @@ impl QuadTree {
                 count += node.element_count as usize;
             }
         }
+
+        debug_assert!(count >= self.elements.debug_len());
         count
     }
 
