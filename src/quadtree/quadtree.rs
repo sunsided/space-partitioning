@@ -1,3 +1,4 @@
+use crate::quadtree::aabb::AABB;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
 use crate::quadtree::node::{Node, NodeElementCountType};
@@ -23,18 +24,6 @@ where
     pub id: Id,
     /// The axis-aligned bounding box of the element.
     rect: AABB,
-}
-
-#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
-pub struct AABB {
-    /// Left X coordinate of the rectangle of the element.
-    pub x1: i32,
-    /// Top Y coordinate of the rectangle of the element.
-    pub y1: i32,
-    /// Right X coordinate of the rectangle of the element.
-    pub x2: i32,
-    /// Bottom Y coordinate of the rectangle of the element.
-    pub y2: i32,
 }
 
 /// Represents an element node in the quadtree.
@@ -99,33 +88,6 @@ impl Default for QuadRect {
     }
 }
 
-impl AABB {
-    #[inline]
-    pub fn new(x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
-        Self { x1, y1, x2, y2 }
-    }
-}
-
-impl From<[i32; 4]> for AABB {
-    #[inline]
-    fn from(rect: [i32; 4]) -> Self {
-        Self::from(&rect)
-    }
-}
-
-impl From<&[i32; 4]> for AABB {
-    #[inline]
-    fn from(rect: &[i32; 4]) -> Self {
-        Self::new(rect[0], rect[1], rect[2], rect[3])
-    }
-}
-
-impl Into<[i32; 4]> for AABB {
-    fn into(self) -> [i32; 4] {
-        [self.x1, self.y1, self.x2, self.y2]
-    }
-}
-
 impl<Id> QuadTreeElement<Id>
 where
     Id: Default,
@@ -139,12 +101,6 @@ where
             id,
             rect: AABB::new(x1, y1, x2, y2),
         }
-    }
-
-    fn to_array(&self) -> [i32; 4] {
-        // TODO: see other TODO about splitting elements into separate coordinate and data structs
-        //       Since we are extracting only the coordinates here, this could help.
-        self.rect.into()
     }
 }
 
@@ -169,7 +125,7 @@ impl QuadTree {
     pub fn insert(&mut self, element: QuadTreeElement) {
         assert!(self.root_rect.contains(&element));
 
-        let element_coords = element.to_array();
+        let element_coords = &element.rect;
 
         // Insert the actual element.
         let element_index = self.elements.insert(element);
@@ -181,7 +137,7 @@ impl QuadTree {
             let node_data = to_process.pop().unwrap();
 
             // Find the leaves // TODO: Doesn't seem to work for center rect example
-            let mut leaves = self.find_leaves_from_root(node_data, element_coords.clone());
+            let mut leaves = self.find_leaves_from_root(node_data, element_coords);
 
             while !leaves.is_empty() {
                 let leaf = leaves.pop_back();
@@ -317,7 +273,7 @@ impl QuadTree {
         todo!()
     }
 
-    fn find_leaves_from_root(&self, root: NodeData, rect: [i32; 4]) -> NodeList {
+    fn find_leaves_from_root(&self, root: NodeData, rect: &AABB) -> NodeList {
         let mut leaves = NodeList::default(); // TODO: extract / pool?
         let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
         to_process.push_back(root);
@@ -343,19 +299,19 @@ impl QuadTree {
             let b = my + hy;
 
             // TODO: Inserting a very large element over many very small ones could yield a lot of nodes.
-            if rect[1] <= my {
-                if rect[0] <= mx {
+            if rect.y1 <= my {
+                if rect.x1 <= mx {
                     to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
                 }
-                if rect[2] > mx {
+                if rect.x2 > mx {
                     to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
                 }
             }
-            if rect[3] > my {
-                if rect[0] <= mx {
+            if rect.y2 > my {
+                if rect.x1 <= mx {
                     to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
                 }
-                if rect[2] > mx {
+                if rect.x2 > mx {
                     to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
                 }
             }
@@ -463,7 +419,7 @@ mod test {
                 rect: AABB::new(-id, -id, id + 1, id + 1),
             });
         }
-        assert_eq!(tree.count_element_references(), count as usize);
+        assert_eq!(tree.count_element_references(), 5);
     }
 
     #[test]
@@ -491,7 +447,7 @@ mod test {
                 y += 1;
             }
         }
-        assert_eq!(tree.count_element_references(), count as usize);
+        assert_eq!(tree.count_element_references(), 1369 as usize);
         let tree = tree;
     }
 
@@ -522,8 +478,8 @@ mod test {
         assert_eq!(tree.count_element_references(), 8);
 
         // Select the top-left quadrant
-        let quadrant_tl = [-20, -20, 0, 0];
-        let results = tree.find_leaves_from_root(tree.get_root_node_data(), quadrant_tl);
+        let quadrant_tl = AABB::new(-20, -20, 0, 0);
+        let results = tree.find_leaves_from_root(tree.get_root_node_data(), &quadrant_tl);
 
         // Only one node matches - the one resembling the top-left quadrant.
         assert_eq!(results.len(), 1);
