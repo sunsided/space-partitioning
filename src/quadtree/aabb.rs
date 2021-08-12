@@ -37,18 +37,11 @@ impl Intersects<AABB> for AABB {
     ///
     /// # Arguments
     /// * [`other`] - The AABB to test for intersection.
+    #[inline]
     fn intersects(&self, other: &AABB) -> bool {
-        // If one rect is on the left side of the other.
-        if self.x1 >= other.x2 || other.x1 >= self.x2 {
-            return false;
-        }
-
-        // If one rectangle is above the other.
-        if self.y1 >= other.y2 || other.y1 >= self.y2 {
-            return false;
-        }
-
-        return true;
+        let a = self.x1.max(other.x1) < self.x2.min(other.x2);
+        let b = self.y1.max(other.y1) < self.y2.min(other.y2);
+        a & b
     }
 }
 
