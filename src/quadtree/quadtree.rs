@@ -18,9 +18,15 @@ pub struct QuadTreeElement<Id = u32>
 where
     Id: Default,
 {
-    // TODO: Split element into two structs: One containing the ID, another one containing the coordinates only. This allows aligning the elements much better.
+    // TODO: Split element into two structs: One containing the ID, another one containing the coordinates only. This allows aligning the elements much better. Benchmark!
     /// Stores the ID for the element (can be used to refer to external data).
     pub id: Id,
+    /// The axis-aligned bounding box of the element.
+    rect: AABB,
+}
+
+#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
+pub struct AABB {
     /// Left X coordinate of the rectangle of the element.
     pub x1: i32,
     /// Top Y coordinate of the rectangle of the element.
@@ -75,7 +81,10 @@ impl QuadRect {
     fn contains(&self, element: &QuadTreeElement) -> bool {
         let r = self.l + self.hx;
         let b = self.t + self.hy;
-        element.x1 >= self.l && element.x2 <= r && element.y1 >= self.t && element.y2 <= b
+        element.rect.x1 >= self.l
+            && element.rect.x2 <= r
+            && element.rect.y1 >= self.t
+            && element.rect.y2 <= b
     }
 }
 
@@ -90,11 +99,52 @@ impl Default for QuadRect {
     }
 }
 
-impl QuadTreeElement {
+impl AABB {
+    #[inline]
+    pub fn new(x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
+        Self { x1, y1, x2, y2 }
+    }
+}
+
+impl From<[i32; 4]> for AABB {
+    #[inline]
+    fn from(rect: [i32; 4]) -> Self {
+        Self::from(&rect)
+    }
+}
+
+impl From<&[i32; 4]> for AABB {
+    #[inline]
+    fn from(rect: &[i32; 4]) -> Self {
+        Self::new(rect[0], rect[1], rect[2], rect[3])
+    }
+}
+
+impl Into<[i32; 4]> for AABB {
+    fn into(self) -> [i32; 4] {
+        [self.x1, self.y1, self.x2, self.y2]
+    }
+}
+
+impl<Id> QuadTreeElement<Id>
+where
+    Id: Default,
+{
+    pub fn new(id: Id, rect: AABB) -> Self {
+        Self { id, rect }
+    }
+
+    pub fn new_xy(id: Id, x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
+        Self {
+            id,
+            rect: AABB::new(x1, y1, x2, y2),
+        }
+    }
+
     fn to_array(&self) -> [i32; 4] {
         // TODO: see other TODO about splitting elements into separate coordinate and data structs
         //       Since we are extracting only the coordinates here, this could help.
-        [self.x1, self.y1, self.x2, self.y2]
+        self.rect.into()
     }
 }
 
@@ -116,7 +166,7 @@ impl QuadTree {
         }
     }
 
-    fn insert(&mut self, element: QuadTreeElement) {
+    pub fn insert(&mut self, element: QuadTreeElement) {
         assert!(self.root_rect.contains(&element));
 
         let element_coords = element.to_array();
@@ -233,19 +283,19 @@ impl QuadTree {
         element_index: free_list::IndexType,
         element: &QuadTreeElement,
     ) {
-        if element.y1 <= my {
-            if element.x1 <= mx {
+        if element.rect.y1 <= my {
+            if element.rect.x1 <= mx {
                 self.insert_element_in_child_node(first_child_index + 0, element_index);
             }
-            if element.x2 > mx {
+            if element.rect.x2 > mx {
                 self.insert_element_in_child_node(first_child_index + 1, element_index);
             }
         }
-        if element.y2 > my {
-            if element.x1 <= mx {
+        if element.rect.y2 > my {
+            if element.rect.x1 <= mx {
                 self.insert_element_in_child_node(first_child_index + 2, element_index);
             }
-            if element.x2 > mx {
+            if element.rect.x2 > mx {
                 self.insert_element_in_child_node(first_child_index + 3, element_index);
             }
         }
@@ -264,11 +314,12 @@ impl QuadTree {
     fn remove(&mut self, node: NodeData) {
         // TODO: set removed node to free_head
         // TODO: Set free_head to removed node index
+        todo!()
     }
 
     fn find_leaves_from_root(&self, root: NodeData, rect: [i32; 4]) -> NodeList {
-        let mut leaves = NodeList::default();
-        let mut to_process = NodeList::default();
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
         to_process.push_back(root);
 
         while to_process.len() > 0 {
@@ -397,10 +448,7 @@ mod test {
         let mut tree = QuadTree::default();
         tree.insert(QuadTreeElement {
             id: 0,
-            x1: 0,
-            y1: 0,
-            x2: 0,
-            y2: 0,
+            rect: AABB::default(),
         });
         assert_eq!(tree.count_element_references(), 1);
     }
@@ -412,10 +460,7 @@ mod test {
         for id in 0..count {
             tree.insert(QuadTreeElement {
                 id: id as _,
-                x1: -id,
-                y1: -id,
-                x2: id + 1,
-                y2: id + 1,
+                rect: AABB::new(-id, -id, id + 1, id + 1),
             });
         }
         assert_eq!(tree.count_element_references(), count as usize);
@@ -438,10 +483,7 @@ mod test {
         for id in 0..count {
             tree.insert(QuadTreeElement {
                 id: id as _,
-                x1: x,
-                y1: y,
-                x2: x + 1,
-                y2: y + 1,
+                rect: AABB::new(x, y, x + 1, y + 1),
             });
             x += 1;
             if x == 16 {
@@ -463,45 +505,15 @@ mod test {
         };
         let mut tree = QuadTree::new(quad_rect, 1);
         // top-left
-        tree.insert(QuadTreeElement {
-            id: 1000,
-            x1: -15,
-            y1: -15,
-            x2: -5,
-            y2: -5,
-        });
+        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
         // top-right
-        tree.insert(QuadTreeElement {
-            id: 2000,
-            x1: 5,
-            y1: -15,
-            x2: 15,
-            y2: -5,
-        });
+        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
         // bottom-left
-        tree.insert(QuadTreeElement {
-            id: 3000,
-            x1: -15,
-            y1: 5,
-            x2: -5,
-            y2: 15,
-        });
+        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
         // bottom-right
-        tree.insert(QuadTreeElement {
-            id: 3000,
-            x1: 5,
-            y1: 5,
-            x2: 15,
-            y2: 15,
-        });
+        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
         // center
-        tree.insert(QuadTreeElement {
-            id: 4000,
-            x1: -5,
-            x2: 5,
-            y1: -5,
-            y2: 5,
-        });
+        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
 
         // The depth of 1 limits the tree to four quadrants.
         // Each of the first four elements creates a single reference
@@ -524,7 +536,7 @@ mod test {
         // top element is the last one inserted, which is #4000.
         let elem_node_a = unsafe { tree.element_nodes.at(first.first_child_or_element) };
         let elem_a = unsafe { tree.elements.at(elem_node_a.element) };
-        assert_eq!(elem_a.id, 4000);
+        assert_eq!(elem_a.id, 5000);
 
         // The next element in the list is the one that was inserted first,
         // namely #1000.
