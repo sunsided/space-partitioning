@@ -1,3 +1,4 @@
+use crate::intersections::Intersects;
 use crate::quadtree::aabb::AABB;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
@@ -6,6 +7,7 @@ use crate::quadtree::node_data::{NodeData, NodeIndexType};
 use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
 use smallvec::SmallVec;
+use std::collections::HashSet;
 
 /// Each node must have less than the maximum allowed number of elements.
 const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tree
@@ -43,7 +45,7 @@ struct QuadTreeElementNode {
 
 pub struct QuadTree<Id = u32>
 where
-    Id: Default,
+    Id: Default + std::cmp::Eq + Copy,
 {
     /// Stores all the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
@@ -67,13 +69,10 @@ where
 }
 
 impl QuadRect {
-    fn contains(&self, element: &QuadTreeElement) -> bool {
+    fn contains(&self, rect: &AABB) -> bool {
         let r = self.l + self.hx;
         let b = self.t + self.hy;
-        element.rect.x1 >= self.l
-            && element.rect.x2 <= r
-            && element.rect.y1 >= self.t
-            && element.rect.y2 <= b
+        rect.x1 >= self.l && rect.x2 <= r && rect.y1 >= self.t && rect.y2 <= b
     }
 }
 
@@ -104,13 +103,19 @@ where
     }
 }
 
-impl Default for QuadTree {
+impl<Id> QuadTree<Id>
+where
+    Id: Default + std::cmp::Eq + std::hash::Hash + Copy,
+{
     fn default() -> Self {
         Self::new(QuadRect::default(), 8)
     }
 }
 
-impl QuadTree {
+impl<Id> QuadTree<Id>
+where
+    Id: Default + std::cmp::Eq + std::hash::Hash + Copy,
+{
     pub fn new(root_rect: QuadRect, max_depth: u32) -> Self {
         Self {
             elements: FreeList::default(),
@@ -122,10 +127,9 @@ impl QuadTree {
         }
     }
 
-    pub fn insert(&mut self, element: QuadTreeElement) {
-        assert!(self.root_rect.contains(&element));
-
+    pub fn insert(&mut self, element: QuadTreeElement<Id>) {
         let element_coords = &element.rect;
+        assert!(self.root_rect.contains(element_coords));
 
         // Insert the actual element.
         let element_index = self.elements.insert(element);
@@ -237,7 +241,7 @@ impl QuadTree {
         my: i32,
         first_child_index: free_list::IndexType,
         element_index: free_list::IndexType,
-        element: &QuadTreeElement,
+        element: &QuadTreeElement<Id>,
     ) {
         if element.rect.y1 <= my {
             if element.rect.x1 <= mx {
@@ -393,11 +397,45 @@ impl QuadTree {
     fn get_root_node_data(&self) -> NodeData {
         NodeData::new_from_root(&self.root_rect)
     }
+
+    pub fn intersect(&self, rect: &AABB) -> HashSet<Id> {
+        let root = self.get_root_node_data();
+        let mut leaves = self.find_leaves_from_root(root, rect);
+
+        let capacity = leaves.len() * MAX_NUM_ELEMENTS as usize;
+        let mut node_set = HashSet::with_capacity(capacity);
+
+        while !leaves.is_empty() {
+            let leaf_data = leaves.pop_back();
+            let leaf = self.nodes[leaf_data.index as usize];
+            debug_assert!(leaf.is_leaf());
+
+            let mut pointer = leaf.first_child_or_element;
+
+            while pointer != free_list::SENTINEL {
+                let elem_node = unsafe { self.element_nodes.at(pointer) };
+                let elem = unsafe { self.elements.at(elem_node.element) };
+
+                // TODO: Check whether the node was already observed
+                // TODO: Enqueue the node ID
+                // TODO: Alternatively: perform a fine-grained check
+
+                if elem.rect.intersects(rect) {
+                    let _was_known = node_set.insert(elem.id);
+                }
+
+                pointer = elem_node.next;
+            }
+        }
+
+        node_set
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::iter::FromIterator;
 
     #[test]
     fn insert_once_works() {
@@ -415,7 +453,7 @@ mod test {
         let count = 2i32;
         for id in 0..count {
             tree.insert(QuadTreeElement {
-                id: id as _,
+                id,
                 rect: AABB::new(-id, -id, id + 1, id + 1),
             });
         }
@@ -438,7 +476,7 @@ mod test {
         let mut y = -16;
         for id in 0..count {
             tree.insert(QuadTreeElement {
-                id: id as _,
+                id,
                 rect: AABB::new(x, y, x + 1, y + 1),
             });
             x += 1;
@@ -481,28 +519,11 @@ mod test {
         let quadrant_tl = AABB::new(-20, -20, 0, 0);
         let results = tree.find_leaves_from_root(tree.get_root_node_data(), &quadrant_tl);
 
-        // Only one node matches - the one resembling the top-left quadrant.
-        assert_eq!(results.len(), 1);
-
-        // The top-left quadrant has two elements, namely #1000 and #4000.
-        let first = tree.nodes[results[0].index as usize];
-        assert_eq!(first.element_count, 2);
-
-        // Since the linked list of elements is build as a stack, the
-        // top element is the last one inserted, which is #4000.
-        let elem_node_a = unsafe { tree.element_nodes.at(first.first_child_or_element) };
-        let elem_a = unsafe { tree.elements.at(elem_node_a.element) };
-        assert_eq!(elem_a.id, 5000);
-
-        // The next element in the list is the one that was inserted first,
-        // namely #1000.
-        let elem_node_b = unsafe { tree.element_nodes.at(elem_node_a.next) };
-        let elem_b = unsafe { tree.elements.at(elem_node_b.element) };
-        assert_eq!(elem_b.id, 1000);
-
-        // Since there were only two elements, the next one is the sentinel.
-        assert_eq!(elem_node_b.next, free_list::SENTINEL);
-
-        todo!("find")
+        // Perform the actual intersection.
+        let results = tree.intersect(&quadrant_tl);
+        let results = Vec::from_iter(results);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&1000));
+        assert!(results.contains(&5000));
     }
 }

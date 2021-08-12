@@ -1,3 +1,6 @@
+use crate::intersections::Intersects;
+use crate::quadtree::centered_aabb::CenteredAABB;
+
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct AABB {
@@ -12,9 +15,40 @@ pub struct AABB {
 }
 
 impl AABB {
+    /// Constructs a new [`AABB`] from the coordinates of its edges.
+    ///
+    /// # Arguments
+    /// * [`x1`] - The left-most X coordinate.
+    /// * [`y1`] - The top-most Y coordinate.
+    /// * [`x2`] - The right-most X coordinate.
+    /// * [`y2`] - The bottom-most Y coordinate.
     #[inline]
     pub fn new(x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
         Self { x1, y1, x2, y2 }
+    }
+}
+
+impl Intersects<AABB> for AABB {
+    /// Tests whether this [`AABB`] intersects with another one.
+    ///
+    /// # Remarks
+    /// It is assumed that none of the AABBs is degenerate,
+    /// i.e., neither a line nor a point.
+    ///
+    /// # Arguments
+    /// * [`other`] - The AABB to test for intersection.
+    fn intersects(&self, other: &AABB) -> bool {
+        // If one rect is on the left side of the other.
+        if self.x1 >= other.x2 || other.x1 >= self.x2 {
+            return false;
+        }
+
+        // If one rectangle is above the other.
+        if self.y1 >= other.y2 || other.y1 >= self.y2 {
+            return false;
+        }
+
+        return true;
     }
 }
 
@@ -79,5 +113,58 @@ mod test {
         for i in 1..=4 {
             assert_eq!(array[i as usize - 1], i);
         }
+    }
+
+    #[test]
+    fn intersects_with_self_works() {
+        let a = AABB::new(0, 0, 1, 1);
+        assert!(a.intersects(&a));
+    }
+
+    #[test]
+    fn intersects_when_partial_overlap_works() {
+        let a = AABB::new(0, 0, 2, 2);
+        let b = AABB::new(1, 1, 3, 3);
+        assert!(a.intersects(&b));
+        assert!(b.intersects(&a));
+
+        let a = AABB::new(0, 0, 2, 2);
+        let b = AABB::new(-1, -1, 1, 1);
+        assert!(a.intersects(&b));
+        assert!(b.intersects(&a));
+
+        let a = AABB::new(0, 0, 2, 2);
+        let b = AABB::new(-1, 1, 1, 2);
+        assert!(a.intersects(&b));
+        assert!(b.intersects(&a));
+    }
+
+    #[test]
+    fn intersects_when_not_overlapping_works() {
+        let a = AABB::new(0, 0, 2, 2);
+        let b = AABB::new(2, 0, 3, 3);
+        assert!(!a.intersects(&b));
+        assert!(!b.intersects(&a));
+
+        let a = AABB::new(0, 0, 2, 2);
+        let b = AABB::new(10, 10, 12, 12);
+        assert!(!a.intersects(&b));
+        assert!(!b.intersects(&a));
+    }
+
+    #[test]
+    fn intersects_when_degenerate_works() {
+        // With a line
+        let a = AABB::new(-1, 0, 0, -1);
+        let b = AABB::new(1, 1, 0, 1);
+        assert!(!a.intersects(&b));
+        assert!(!a.intersects(&a));
+        assert!(!b.intersects(&b));
+
+        // With a point
+        let c = AABB::new(0, 0, 0, 0);
+        assert!(!a.intersects(&c));
+        assert!(!b.intersects(&c));
+        assert!(!c.intersects(&c));
     }
 }

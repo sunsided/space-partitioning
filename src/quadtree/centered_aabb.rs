@@ -35,15 +35,6 @@ where
             height,
         }
     }
-
-    pub fn from_array(xywh: [T; 4]) -> Self {
-        Self {
-            center_x: xywh[0],
-            center_y: xywh[1],
-            width: xywh[2],
-            height: xywh[3],
-        }
-    }
 }
 
 pub trait FromLeftTopWidthHeight<T> {
