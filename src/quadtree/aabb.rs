@@ -38,7 +38,7 @@ impl Intersects<AABB> for AABB {
     /// # Arguments
     /// * [`other`] - The AABB to test for intersection.
     #[inline]
-    fn intersects(&self, other: &AABB) -> bool {
+    fn intersects_with(&self, other: &AABB) -> bool {
         let a = self.x1.max(other.x1) < self.x2.min(other.x2);
         let b = self.y1.max(other.y1) < self.y2.min(other.y2);
         a & b
@@ -111,38 +111,38 @@ mod test {
     #[test]
     fn intersects_with_self_works() {
         let a = AABB::new(0, 0, 1, 1);
-        assert!(a.intersects(&a));
+        assert!(a.intersects_with(&a));
     }
 
     #[test]
     fn intersects_when_partial_overlap_works() {
         let a = AABB::new(0, 0, 2, 2);
         let b = AABB::new(1, 1, 3, 3);
-        assert!(a.intersects(&b));
-        assert!(b.intersects(&a));
+        assert!(a.intersects_with(&b));
+        assert!(b.intersects_with(&a));
 
         let a = AABB::new(0, 0, 2, 2);
         let b = AABB::new(-1, -1, 1, 1);
-        assert!(a.intersects(&b));
-        assert!(b.intersects(&a));
+        assert!(a.intersects_with(&b));
+        assert!(b.intersects_with(&a));
 
         let a = AABB::new(0, 0, 2, 2);
         let b = AABB::new(-1, 1, 1, 2);
-        assert!(a.intersects(&b));
-        assert!(b.intersects(&a));
+        assert!(a.intersects_with(&b));
+        assert!(b.intersects_with(&a));
     }
 
     #[test]
     fn intersects_when_not_overlapping_works() {
         let a = AABB::new(0, 0, 2, 2);
         let b = AABB::new(2, 0, 3, 3);
-        assert!(!a.intersects(&b));
-        assert!(!b.intersects(&a));
+        assert!(!a.intersects_with(&b));
+        assert!(!b.intersects_with(&a));
 
         let a = AABB::new(0, 0, 2, 2);
         let b = AABB::new(10, 10, 12, 12);
-        assert!(!a.intersects(&b));
-        assert!(!b.intersects(&a));
+        assert!(!a.intersects_with(&b));
+        assert!(!b.intersects_with(&a));
     }
 
     #[test]
@@ -150,14 +150,14 @@ mod test {
         // With a line
         let a = AABB::new(-1, 0, 0, -1);
         let b = AABB::new(1, 1, 0, 1);
-        assert!(!a.intersects(&b));
-        assert!(!a.intersects(&a));
-        assert!(!b.intersects(&b));
+        assert!(!a.intersects_with(&b));
+        assert!(!a.intersects_with(&a));
+        assert!(!b.intersects_with(&b));
 
         // With a point
         let c = AABB::new(0, 0, 0, 0);
-        assert!(!a.intersects(&c));
-        assert!(!b.intersects(&c));
-        assert!(!c.intersects(&c));
+        assert!(!a.intersects_with(&c));
+        assert!(!b.intersects_with(&c));
+        assert!(!c.intersects_with(&c));
     }
 }

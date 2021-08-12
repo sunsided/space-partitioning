@@ -418,7 +418,7 @@ where
 
                 // Depending on the size of the quadrant, the candidate element
                 // might still not be covered by the search rectangle.
-                if elem.rect.intersects(rect) {
+                if elem.rect.intersects_with(rect) {
                     let _was_known = node_set.insert(elem.id);
                 }
 
@@ -443,6 +443,8 @@ mod test {
             rect: AABB::default(),
         });
         assert_eq!(tree.count_element_references(), 1);
+        tree.cleanup();
+        assert_eq!(tree.count_element_references(), 1);
     }
 
     #[test]
@@ -455,6 +457,8 @@ mod test {
                 rect: AABB::new(-id, -id, id + 1, id + 1),
             });
         }
+        assert_eq!(tree.count_element_references(), 5);
+        tree.cleanup();
         assert_eq!(tree.count_element_references(), 5);
     }
 
