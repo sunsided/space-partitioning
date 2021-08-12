@@ -416,10 +416,8 @@ where
                 let elem_node = unsafe { self.element_nodes.at(pointer) };
                 let elem = unsafe { self.elements.at(elem_node.element) };
 
-                // TODO: Check whether the node was already observed
-                // TODO: Enqueue the node ID
-                // TODO: Alternatively: perform a fine-grained check
-
+                // Depending on the size of the quadrant, the candidate element
+                // might still not be covered by the search rectangle.
                 if elem.rect.intersects(rect) {
                     let _was_known = node_set.insert(elem.id);
                 }
@@ -500,6 +498,7 @@ mod test {
         let mut tree = QuadTree::new(quad_rect, 1);
         // top-left
         tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
+        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
         // top-right
         tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
         // bottom-left
@@ -510,13 +509,13 @@ mod test {
         tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
 
         // The depth of 1 limits the tree to four quadrants.
-        // Each of the first four elements creates a single reference
+        // Each of the first five elements creates a single reference
         // in each of the quadrants. The "center" element covers
-        // all four of them, and therefore adds another four references.
-        assert_eq!(tree.count_element_references(), 8);
+        // all four quadrants, and therefore adds another four references.
+        assert_eq!(tree.count_element_references(), 9);
 
         // Select the top-left quadrant
-        let quadrant_tl = AABB::new(-20, -20, 0, 0);
+        let quadrant_tl = AABB::new(-17, -17, 0, 0);
         let results = tree.find_leaves_from_root(tree.get_root_node_data(), &quadrant_tl);
 
         // Perform the actual intersection.
@@ -524,6 +523,7 @@ mod test {
         let results = Vec::from_iter(results);
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1000));
+        assert!(!results.contains(&1001));
         assert!(results.contains(&5000));
     }
 }
