@@ -374,6 +374,34 @@ where
         count
     }
 
+    /// Collects all element IDs stored in the tree by visiting all cells.
+    fn collect_ids(&self) -> HashSet<Id> {
+        let mut ids = HashSet::new();
+        let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
+        let mut count = 0usize;
+
+        while !to_process.is_empty() {
+            let index = to_process.pop().unwrap();
+            let node = &self.nodes[index];
+            if node.is_branch() {
+                for j in 0..4 {
+                    to_process.push((node.first_child_or_element + j) as usize);
+                }
+            } else {
+                let mut ptr = node.first_child_or_element;
+                while ptr != free_list::SENTINEL {
+                    let node = unsafe { self.element_nodes.at(ptr) };
+                    let element = unsafe { self.elements.at(node.element) };
+                    ids.insert(element.id);
+                    ptr = node.next;
+                }
+            }
+        }
+
+        debug_assert_eq!(ids.len(), self.elements.debug_len());
+        ids
+    }
+
     #[inline]
     fn get_root_node_data(&self) -> NodeData {
         NodeData::new_from_root(&self.root_rect)
@@ -424,8 +452,10 @@ mod test {
             rect: AABB::default(),
         });
         assert_eq!(tree.count_element_references(), 1);
-        tree.cleanup();
-        assert_eq!(tree.count_element_references(), 1);
+
+        let inserted_ids = tree.collect_ids();
+        assert_eq!(inserted_ids.len(), 1);
+        assert!(inserted_ids.contains(&0));
     }
 
     #[test]
@@ -439,8 +469,11 @@ mod test {
             });
         }
         assert_eq!(tree.count_element_references(), 5);
-        tree.cleanup();
-        assert_eq!(tree.count_element_references(), 5);
+
+        let inserted_ids = tree.collect_ids();
+        assert_eq!(inserted_ids.len(), 2);
+        assert!(inserted_ids.contains(&0));
+        assert!(inserted_ids.contains(&1));
     }
 
     #[test]
@@ -462,6 +495,9 @@ mod test {
         }
         assert_eq!(tree.count_element_references(), 1369 as usize);
         let tree = tree;
+
+        let inserted_ids = tree.collect_ids();
+        assert_eq!(inserted_ids.len(), count as usize);
     }
 
     #[test]
@@ -485,6 +521,16 @@ mod test {
         // in each of the quadrants. The "center" element covers
         // all four quadrants, and therefore adds another four references.
         assert_eq!(tree.count_element_references(), 9);
+
+        /// Ensure we have the exact elements inserted.
+        let inserted_ids = tree.collect_ids();
+        assert_eq!(inserted_ids.len(), 6);
+        assert!(inserted_ids.contains(&1000));
+        assert!(inserted_ids.contains(&1001));
+        assert!(inserted_ids.contains(&2000));
+        assert!(inserted_ids.contains(&3000));
+        assert!(inserted_ids.contains(&4000));
+        assert!(inserted_ids.contains(&5000));
 
         // Select the top-left quadrant
         let quadrant_tl = AABB::new(-17, -17, 0, 0);
