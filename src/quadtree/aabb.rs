@@ -38,9 +38,35 @@ impl Intersects<AABB> for AABB {
     /// * [`other`] - The AABB to test for intersection.
     #[inline]
     fn intersects_with(&self, other: &AABB) -> bool {
-        let a = self.x1.max(other.x1) < self.x2.min(other.x2);
-        let b = self.y1.max(other.y1) < self.y2.min(other.y2);
-        a & b
+        // TODO: We might want to have tree specifically for storing point data rather than rects
+        //       as this would simplify the tests below.
+
+        let x1_max = self.x1.max(other.x1);
+        let x2_min = self.x2.min(other.x2);
+        let y1_max = self.y1.max(other.y1);
+        let y2_min = self.y2.min(other.y2);
+
+        // In the non-degenerate case (rect/rect), this covers the intersection.
+        let a = x1_max < x2_min;
+        let b = y1_max < y2_min;
+        let intersects = a & b;
+
+        // If intersects is true, we could skip the entire following
+        // block. With instruction pipelining, this could incur penalties from
+        // branch mis-predictions however, so it might be better to just calculate
+        // the test for degenerate cases anyway.
+
+        // In the degenerate case we need a more relaxed test.
+        let d_a = x1_max <= x2_min;
+        let d_b = y1_max <= y2_min;
+
+        // Only use the above values in degenerate cases.
+        let degenerate_x = (other.x1 == other.x2) | (self.x1 == self.x2);
+        let degenerate_y = (other.y1 == other.y2) | (self.y1 == self.y2);
+        let is_degenerate = degenerate_x | degenerate_y;
+        let d_intersects = is_degenerate & d_a & d_b;
+
+        intersects | d_intersects
     }
 }
 
@@ -138,10 +164,10 @@ mod test {
         assert!(!a.intersects_with(&b));
         assert!(!b.intersects_with(&a));
 
-        let a = AABB::new(0, 0, 2, 2);
-        let b = AABB::new(10, 10, 12, 12);
-        assert!(!a.intersects_with(&b));
-        assert!(!b.intersects_with(&a));
+        let c = AABB::new(0, 0, 2, 2);
+        let d = AABB::new(10, 10, 12, 12);
+        assert!(!c.intersects_with(&d));
+        assert!(!d.intersects_with(&c));
     }
 
     #[test]
@@ -152,11 +178,34 @@ mod test {
         assert!(!a.intersects_with(&b));
         assert!(!a.intersects_with(&a));
         assert!(!b.intersects_with(&b));
+    }
 
-        // With a point
-        let c = AABB::new(0, 0, 0, 0);
-        assert!(!a.intersects_with(&c));
-        assert!(!b.intersects_with(&c));
-        assert!(!c.intersects_with(&c));
+    #[test]
+    fn intersects_rect_point_works() {
+        let point = AABB::new(3, 3, 3, 3);
+
+        // Point lies inside the rectangle.
+        let covering_rect = AABB::new(-10, -10, 10, 10);
+        assert!(covering_rect.intersects_with(&point));
+
+        // Point lies outside the rectangle.
+        let other_rect = AABB::new(-10, -10, 0, 0);
+        assert!(!other_rect.intersects_with(&point));
+    }
+
+    #[test]
+    fn intersects_line_point_works() {
+        let line = AABB::new(-10, 0, 10, 0);
+        let point = AABB::new(1, 0, 1, 0);
+        assert!(line.intersects_with(&point));
+
+        let boundary_point = AABB::new(10, 0, 10, 0);
+        assert!(line.intersects_with(&boundary_point));
+    }
+
+    #[test]
+    fn intersects_point_point_works() {
+        let point = AABB::new(-1, -1, -1, -1);
+        assert!(point.intersects_with(&point));
     }
 }

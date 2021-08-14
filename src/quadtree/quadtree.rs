@@ -374,39 +374,16 @@ where
         count
     }
 
-    /// Collects all element IDs stored in the tree by visiting all cells.
-    fn collect_ids(&self) -> HashSet<Id> {
-        let mut ids = HashSet::new();
-        let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
-        let mut count = 0usize;
-
-        while !to_process.is_empty() {
-            let index = to_process.pop().unwrap();
-            let node = &self.nodes[index];
-            if node.is_branch() {
-                for j in 0..4 {
-                    to_process.push((node.first_child_or_element + j) as usize);
-                }
-            } else {
-                let mut ptr = node.first_child_or_element;
-                while ptr != free_list::SENTINEL {
-                    let node = unsafe { self.element_nodes.at(ptr) };
-                    let element = unsafe { self.elements.at(node.element) };
-                    ids.insert(element.id);
-                    ptr = node.next;
-                }
-            }
-        }
-
-        debug_assert_eq!(ids.len(), self.elements.debug_len());
-        ids
-    }
-
     #[inline]
     fn get_root_node_data(&self) -> NodeData {
         NodeData::new_from_root(&self.root_rect)
     }
 
+    /// Returns the set of IDs that occupy space within the
+    /// specified bounding box.
+    ///
+    /// # Arguments
+    /// * [`rect`] - The rectangle to test for.
     pub fn intersect(&self, rect: &AABB) -> HashSet<Id> {
         let root = self.get_root_node_data();
         let mut leaves = self.find_leaves_from_root(root, rect);
@@ -420,7 +397,6 @@ where
             debug_assert!(leaf.is_leaf());
 
             let mut pointer = leaf.first_child_or_element;
-
             while pointer != free_list::SENTINEL {
                 let elem_node = unsafe { self.element_nodes.at(pointer) };
                 let elem = unsafe { self.elements.at(elem_node.element) };
@@ -436,6 +412,12 @@ where
         }
 
         node_set
+    }
+
+    /// Collects all element IDs stored in the tree by visiting all cells.
+    fn collect_ids(&self) -> HashSet<Id> {
+        let aabb = self.root_rect.into();
+        self.intersect(&aabb)
     }
 }
 

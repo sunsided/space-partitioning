@@ -5,7 +5,7 @@ use crate::quadtree::centered_aabb::{CenteredAABB, FromLeftTopWidthHeight};
 ///
 /// # Remarks
 /// Only the tree node stores its extents. Bounding boxes for sub-nodes are computed on the fly.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct QuadRect {
     l: i32,
     t: i32,
@@ -38,6 +38,12 @@ impl Default for QuadRect {
             hx: i32::MAX,
             hy: i32::MAX,
         }
+    }
+}
+
+impl Into<AABB> for QuadRect {
+    fn into(self) -> AABB {
+        AABB::new(self.l, self.t, self.l + self.hx, self.t + self.hy)
     }
 }
 
