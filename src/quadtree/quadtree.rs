@@ -68,25 +68,6 @@ where
     max_depth: u32,
 }
 
-impl QuadRect {
-    fn contains(&self, rect: &AABB) -> bool {
-        let r = self.l + self.hx;
-        let b = self.t + self.hy;
-        rect.x1 >= self.l && rect.x2 <= r && rect.y1 >= self.t && rect.y2 <= b
-    }
-}
-
-impl Default for QuadRect {
-    fn default() -> Self {
-        QuadRect {
-            l: i32::MIN >> 1,
-            t: i32::MIN >> 1,
-            hx: i32::MAX,
-            hy: i32::MAX,
-        }
-    }
-}
-
 impl<Id> QuadTreeElement<Id>
 where
     Id: Default,
@@ -464,15 +445,7 @@ mod test {
 
     #[test]
     fn insert_a_lot_works() {
-        let mut tree = QuadTree::new(
-            QuadRect {
-                l: -16,
-                t: -16,
-                hx: 32,
-                hy: 32,
-            },
-            8,
-        );
+        let mut tree = QuadTree::new(QuadRect::new(-16, -16, 32, 32), 8);
         let count = 1024i32;
         let mut x = -16;
         let mut y = -16;
@@ -493,12 +466,7 @@ mod test {
 
     #[test]
     fn find_works() {
-        let quad_rect = QuadRect {
-            l: -20,
-            t: -20,
-            hx: 40,
-            hy: 40,
-        };
+        let quad_rect = QuadRect::new(-20, -20, 40, 40);
         let mut tree = QuadTree::new(quad_rect, 1);
         // top-left
         tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));

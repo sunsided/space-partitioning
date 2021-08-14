@@ -14,17 +14,23 @@ pub struct NodeData {
 }
 
 impl NodeData {
+    #[inline]
     pub fn new(l: i32, t: i32, hx: i32, hy: i32, index: u32, depth: u32) -> Self {
-        Self {
-            index,
-            crect: CenteredAABB::from_ltwh(l, t, hx, hy),
-            depth,
-        }
+        Self::new_from_centered_aabb(index, depth, CenteredAABB::from_ltwh(l, t, hx, hy))
     }
 
     #[inline]
     pub fn new_from_root(root_rect: &QuadRect) -> Self {
-        Self::new(root_rect.l, root_rect.t, root_rect.hx, root_rect.hy, 0, 0)
+        Self::new_from_centered_aabb(0, 0, root_rect.into())
+    }
+
+    #[inline]
+    fn new_from_centered_aabb(index: u32, depth: u32, crect: CenteredAABB) -> Self {
+        Self {
+            index,
+            crect,
+            depth,
+        }
     }
 
     /// Determines if a node is at least `smallest_size` in width or height,

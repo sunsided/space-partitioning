@@ -1,5 +1,4 @@
 use crate::intersections::Intersects;
-use crate::quadtree::centered_aabb::CenteredAABB;
 
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
