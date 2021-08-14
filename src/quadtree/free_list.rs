@@ -79,6 +79,7 @@ where
             return;
         }
         debug_assert!(!self.debug_is_in_free_list(n));
+        debug_assert!(self.length > 0);
 
         unsafe { ManuallyDrop::drop(&mut self.data[n as usize].element) };
         self.data[n as usize].next = self.first_free;
@@ -130,6 +131,11 @@ where
         {
             self.length = 0;
         }
+    }
+
+    /// Tests whether the specified index indicates the end of a linked list.
+    pub fn is_end_of_list(index: IndexType) -> bool {
+        index == SENTINEL
     }
 
     /// Gets a reference to the value at the specified index.

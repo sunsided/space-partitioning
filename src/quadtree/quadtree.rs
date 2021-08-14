@@ -40,7 +40,7 @@ struct QuadTreeElementNode {
     /// indicates the end of the list.
     next: free_list::IndexType,
     /// Stores the element index.
-    element: free_list::IndexType,
+    element_idx: free_list::IndexType,
 }
 
 pub struct QuadTree<Id = u32>
@@ -113,7 +113,7 @@ where
         assert!(self.root_rect.contains(element_coords));
 
         // Insert the actual element.
-        let element_index = self.elements.insert(element);
+        let element_idx = self.elements.insert(element);
 
         let mut to_process: SmallVec<[NodeData; 128]> =
             smallvec::smallvec![self.get_root_node_data()];
@@ -121,7 +121,7 @@ where
         while !to_process.is_empty() {
             let node_data = to_process.pop().unwrap();
 
-            // Find the leaves // TODO: Doesn't seem to work for center rect example
+            // Find the leaves
             let mut leaves = self.find_leaves_from_root(node_data, element_coords);
 
             while !leaves.is_empty() {
@@ -139,12 +139,12 @@ where
                 let must_store_element = !node_is_full || !can_split;
                 if must_store_element {
                     // This leaf takes the element reference without further splitting.
-                    let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-                        element: element_index,
+                    let element_node_idx = self.element_nodes.insert(QuadTreeElementNode {
+                        element_idx,
                         next: first_child_or_element,
                     });
                     let node = &mut self.nodes[leaf.index as usize];
-                    node.first_child_or_element = element_node_index;
+                    node.first_child_or_element = element_node_idx;
                     node.element_count += 1;
                 } else {
                     // At this point we have to split the current node.
@@ -172,13 +172,13 @@ where
         // For each element in the list ...
         while element_node_index != free_list::SENTINEL {
             let element_node = unsafe { *self.element_nodes.at(element_node_index) };
-            let element = unsafe { *self.elements.at(element_node.element) };
+            let element = unsafe { *self.elements.at(element_node.element_idx) };
 
             self.assign_element_to_child_nodes(
                 mx,
                 my,
                 first_child_index,
-                element_node.element,
+                element_node.element_idx,
                 &element,
             );
 
@@ -246,17 +246,95 @@ where
     fn insert_element_in_child_node(&mut self, child_index: u32, element: free_list::IndexType) {
         let node = &mut self.nodes[child_index as usize];
         let element_node_index = self.element_nodes.insert(QuadTreeElementNode {
-            element,
+            element_idx: element,
             next: node.first_child_or_element,
         });
         node.first_child_or_element = element_node_index;
         node.element_count += 1;
     }
 
-    fn remove(&mut self, node: NodeData) {
-        // TODO: set removed node to free_head
-        // TODO: Set free_head to removed node index
-        todo!()
+    fn remove(&mut self, element: &QuadTreeElement<Id>) -> bool {
+        // Find the leaves containing the node.
+        let element_coords = &element.rect;
+        let root = self.get_root_node_data();
+
+        // The index of the element (if it was found).
+        let mut found_element_idx = free_list::SENTINEL;
+
+        let mut leaves = self.find_leaves_from_root(root, element_coords);
+        while !leaves.is_empty() {
+            let leaf = leaves.pop_back();
+            let leaf_node_data = self.nodes[leaf.index as usize];
+            debug_assert!(leaf_node_data.element_count >= 1);
+
+            // Used for debug assertion.
+            let mut element_found = false;
+
+            // Find the element in question.
+            let mut element_node_idx = leaf_node_data.first_child_or_element;
+            let mut prev_element_node_idx = element_node_idx;
+            let mut new_first_child_or_element = element_node_idx;
+
+            while element_node_idx != free_list::SENTINEL {
+                let elem_node = *unsafe { self.element_nodes.at(element_node_idx) };
+                let elem = unsafe { self.elements.at(elem_node.element_idx) };
+
+                if elem.id == element.id {
+                    debug_assert!(!element_found);
+                    element_found = true;
+
+                    // If the element to be deleted is the first element,
+                    // we need to update the leaf.
+                    if leaf_node_data.first_child_or_element == element_node_idx {
+                        new_first_child_or_element = elem_node.next;
+                    }
+
+                    // Update the previous node if it exists.
+                    if element_node_idx != prev_element_node_idx {
+                        unsafe { self.element_nodes.at_mut(prev_element_node_idx) }.next =
+                            elem_node.next;
+                    }
+
+                    // Remove the reference from this leaf and
+                    // keep track of the element index in the list.
+                    self.element_nodes.erase(element_node_idx);
+                    debug_assert!(
+                        found_element_idx == free_list::SENTINEL
+                            || found_element_idx == elem_node.element_idx
+                    );
+                    found_element_idx = elem_node.element_idx;
+                }
+
+                prev_element_node_idx = element_node_idx;
+                element_node_idx = elem_node.next;
+
+                // We assume that a user never inserts the same element
+                // twice, therefore there is no need to visit the other
+                // elements of this node if we found the correct one.
+                //
+                // To assert that elements are only inserted once (per node),
+                // we allow further iteration during debugging.
+                #[cfg(not(debug_assertions))]
+                if element_found {
+                    break;
+                }
+            }
+
+            // Update the leaf node itself.
+            let node = &mut self.nodes[leaf.index as usize];
+            node.first_child_or_element = new_first_child_or_element;
+
+            debug_assert!(element_found);
+            debug_assert!(node.element_count > 0);
+            node.element_count -= 1;
+        }
+
+        if found_element_idx != free_list::SENTINEL {
+            self.elements.erase(found_element_idx);
+            true
+        } else {
+            false
+        }
     }
 
     fn find_leaves_from_root(&self, root: NodeData, rect: &AABB) -> NodeList {
@@ -397,10 +475,10 @@ where
             let leaf = self.nodes[leaf_data.index as usize];
             debug_assert!(leaf.is_leaf());
 
-            let mut pointer = leaf.first_child_or_element;
-            while pointer != free_list::SENTINEL {
-                let elem_node = unsafe { self.element_nodes.at(pointer) };
-                let elem = unsafe { self.elements.at(elem_node.element) };
+            let mut elem_node_idx = leaf.first_child_or_element;
+            while elem_node_idx != free_list::SENTINEL {
+                let elem_node = unsafe { self.element_nodes.at(elem_node_idx) };
+                let elem = unsafe { self.elements.at(elem_node.element_idx) };
 
                 // Depending on the size of the quadrant, the candidate element
                 // might still not be covered by the search rectangle.
@@ -408,7 +486,7 @@ where
                     let _was_known = node_set.insert(elem.id);
                 }
 
-                pointer = elem_node.next;
+                elem_node_idx = elem_node.next;
             }
         }
 
@@ -526,5 +604,105 @@ mod test {
         assert!(results.contains(&1000));
         assert!(!results.contains(&1001));
         assert!(results.contains(&5000));
+    }
+
+    #[test]
+    fn erase_last_works() {
+        let quad_rect = QuadRect::new(-20, -20, 40, 40);
+        let mut tree = QuadTree::new(quad_rect, 1);
+        // top-left
+        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
+        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+        // top-right
+        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+        // bottom-left
+        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+        // bottom-right
+        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+        // center
+        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+
+        // Similar to index test.
+        assert_eq!(tree.collect_ids().len(), 6);
+        assert_eq!(tree.count_element_references(), 9);
+
+        // Erase the last-inserted node.
+        assert!(tree.remove(&QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5))));
+        assert_eq!(tree.collect_ids().len(), 5);
+        assert_eq!(tree.count_element_references(), 5);
+
+        // TODO: Test that a call to cleanup() didn't change anything here.
+    }
+
+    #[test]
+    fn erase_first_works() {
+        let quad_rect = QuadRect::new(-20, -20, 40, 40);
+        let mut tree = QuadTree::new(quad_rect, 1);
+        // top-left
+        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
+        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+        // top-right
+        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+        // bottom-left
+        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+        // bottom-right
+        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+        // center
+        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+
+        // Similar to index test.
+        assert_eq!(tree.collect_ids().len(), 6);
+        assert_eq!(tree.count_element_references(), 9);
+
+        // Erase the first-inserted node.
+        assert!(tree.remove(&QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5))));
+        assert_eq!(tree.collect_ids().len(), 5);
+        assert_eq!(tree.count_element_references(), 8);
+
+        // TODO: Test that a call to cleanup() didn't change anything here.
+    }
+
+    #[test]
+    fn cleanup_works() {
+        let quad_rect = QuadRect::new(-20, -20, 40, 40);
+        let mut tree = QuadTree::new(quad_rect, 1);
+        // top-left
+        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
+        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+        // top-right
+        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+        // bottom-left
+        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+        // bottom-right
+        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+        // center
+        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+
+        // Similar to index test.
+        assert_eq!(tree.collect_ids().len(), 6);
+        assert_eq!(tree.count_element_references(), 9);
+
+        // Erase the all elements.
+        assert!(tree.remove(&QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5))));
+        assert!(tree.remove(&QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18))));
+        assert!(tree.remove(&QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5))));
+        assert!(tree.remove(&QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15))));
+        assert!(tree.remove(&QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15))));
+        assert!(tree.remove(&QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5))));
+        assert_eq!(tree.collect_ids().len(), 0);
+        assert_eq!(tree.count_element_references(), 0);
+
+        // Since cleanup wasn't called yet, the root is still considered a branch
+        // with four child nodes.
+        assert!(tree.nodes[0].is_branch());
+        assert_eq!(tree.nodes[0].first_child_or_element, 1);
+
+        tree.cleanup();
+
+        // Since all four child nodes of the root were empty,
+        // cleanup has removed them. The root node is now a leaf
+        // with zero elements.
+        assert!(tree.nodes[0].is_leaf());
+        assert_eq!(tree.nodes[0].element_count, 0);
     }
 }
