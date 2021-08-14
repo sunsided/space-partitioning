@@ -224,21 +224,22 @@ where
         element_index: free_list::IndexType,
         element: &QuadTreeElement<Id>,
     ) {
-        if element.rect.y1 <= my {
-            if element.rect.x1 <= mx {
-                self.insert_element_in_child_node(first_child_index + 0, element_index);
-            }
-            if element.rect.x2 > mx {
-                self.insert_element_in_child_node(first_child_index + 1, element_index);
-            }
+        let insert_top = element.rect.y1 <= my;
+        let insert_bottom = element.rect.y2 > my;
+        let insert_left = element.rect.x1 <= mx;
+        let insert_right = element.rect.x2 > mx;
+
+        if insert_top & insert_left {
+            self.insert_element_in_child_node(first_child_index + 0, element_index);
         }
-        if element.rect.y2 > my {
-            if element.rect.x1 <= mx {
-                self.insert_element_in_child_node(first_child_index + 2, element_index);
-            }
-            if element.rect.x2 > mx {
-                self.insert_element_in_child_node(first_child_index + 3, element_index);
-            }
+        if insert_top & insert_right {
+            self.insert_element_in_child_node(first_child_index + 1, element_index);
+        }
+        if insert_bottom & insert_left {
+            self.insert_element_in_child_node(first_child_index + 2, element_index);
+        }
+        if insert_bottom & insert_right {
+            self.insert_element_in_child_node(first_child_index + 3, element_index);
         }
     }
 
