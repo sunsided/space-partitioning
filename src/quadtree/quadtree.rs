@@ -384,11 +384,13 @@ where
         leaves
     }
 
-    pub fn cleanup(&mut self) {
+    pub fn cleanup(&mut self) -> bool {
         // Only process the root if it is not a leaf.
         if self.nodes[0].is_leaf() {
-            return;
+            return false;
         }
+
+        let mut tree_compacted = false;
 
         // Initialize the stack of nodes to be processed with the index of the root node.
         // TODO: revisit the small list size, check element count
@@ -417,7 +419,7 @@ where
             // If all the children were empty leaves, remove them and
             // make this node the new empty leaf.
             if num_empty_leaves == 4 {
-                // TODO: Reverse, compare to zero
+                // TODO: Reverse, compare to zero?
                 // Push all 4 children to the free list.
                 // (We don't change the indexes of the 2nd to 4th child because
                 // child nodes are always processed together.)
@@ -427,8 +429,12 @@ where
                 // Make this node the new empty leaf.
                 let node = &mut self.nodes[node_index as usize];
                 node.make_empty_leaf();
+
+                tree_compacted = true;
             }
         }
+
+        tree_compacted
     }
 
     /// Counts the total number of references. This number should be at least
@@ -631,7 +637,8 @@ mod test {
         assert_eq!(tree.collect_ids().len(), 5);
         assert_eq!(tree.count_element_references(), 5);
 
-        // TODO: Test that a call to cleanup() didn't change anything here.
+        // Since there are still populated child nodes, cleanup doesn't do anything.
+        assert!(!tree.cleanup());
     }
 
     #[test]
@@ -659,7 +666,8 @@ mod test {
         assert_eq!(tree.collect_ids().len(), 5);
         assert_eq!(tree.count_element_references(), 8);
 
-        // TODO: Test that a call to cleanup() didn't change anything here.
+        // Since there are still populated child nodes, cleanup doesn't do anything.
+        assert!(!tree.cleanup());
     }
 
     #[test]
@@ -697,7 +705,8 @@ mod test {
         assert!(tree.nodes[0].is_branch());
         assert_eq!(tree.nodes[0].first_child_or_element, 1);
 
-        tree.cleanup();
+        // Cleanup does something now.
+        assert!(tree.cleanup());
 
         // Since all four child nodes of the root were empty,
         // cleanup has removed them. The root node is now a leaf
