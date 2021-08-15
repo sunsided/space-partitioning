@@ -1,16 +1,13 @@
 use crate::intersections::IntersectsWith;
+use crate::quadtree::Point;
 
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
 pub struct AABB {
-    /// Left X coordinate of the rectangle of the element.
-    pub x1: i32,
-    /// Top Y coordinate of the rectangle of the element.
-    pub y1: i32,
-    /// Right X coordinate of the rectangle of the element.
-    pub x2: i32,
-    /// Bottom Y coordinate of the rectangle of the element.
-    pub y2: i32,
+    /// Top left coordinate of the rectangle of the element.
+    pub tl: Point,
+    /// Bottom right coordinate of the rectangle of the element.
+    pub br: Point,
 }
 
 impl AABB {
@@ -23,7 +20,10 @@ impl AABB {
     /// * [`y2`] - The bottom-most Y coordinate.
     #[inline]
     pub fn new(x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
-        Self { x1, y1, x2, y2 }
+        Self {
+            tl: Point::new(x1, y1),
+            br: Point::new(x2, y2),
+        }
     }
 }
 
@@ -41,10 +41,10 @@ impl IntersectsWith<AABB> for AABB {
         // TODO: We might want to have tree specifically for storing point data rather than rects
         //       as this would simplify the tests below.
 
-        let x1_max = self.x1.max(other.x1);
-        let x2_min = self.x2.min(other.x2);
-        let y1_max = self.y1.max(other.y1);
-        let y2_min = self.y2.min(other.y2);
+        let x1_max = self.tl.x.max(other.tl.x);
+        let x2_min = self.br.x.min(other.br.x);
+        let y1_max = self.tl.y.max(other.tl.y);
+        let y2_min = self.br.y.min(other.br.y);
 
         // In the non-degenerate case (rect/rect), this covers the intersection.
         let a = x1_max < x2_min;
@@ -61,8 +61,8 @@ impl IntersectsWith<AABB> for AABB {
         let d_b = y1_max <= y2_min;
 
         // Only use the above values in degenerate cases.
-        let degenerate_x = (other.x1 == other.x2) | (self.x1 == self.x2);
-        let degenerate_y = (other.y1 == other.y2) | (self.y1 == self.y2);
+        let degenerate_x = (other.tl.x == other.br.x) | (self.tl.x == self.br.x);
+        let degenerate_y = (other.tl.y == other.br.y) | (self.tl.y == self.br.y);
         let is_degenerate = degenerate_x | degenerate_y;
         let d_intersects = is_degenerate & d_a & d_b;
 
@@ -86,7 +86,7 @@ impl From<&[i32; 4]> for AABB {
 
 impl Into<[i32; 4]> for AABB {
     fn into(self) -> [i32; 4] {
-        [self.x1, self.y1, self.x2, self.y2]
+        [self.tl.x, self.tl.y, self.br.x, self.br.y]
     }
 }
 
@@ -109,19 +109,19 @@ mod test {
     #[test]
     fn from_works() {
         let aabb = AABB::from([1, 2, 3, 4]);
-        assert_eq!(aabb.x1, 1);
-        assert_eq!(aabb.y1, 2);
-        assert_eq!(aabb.x2, 3);
-        assert_eq!(aabb.y2, 4);
+        assert_eq!(aabb.tl.x, 1);
+        assert_eq!(aabb.tl.y, 2);
+        assert_eq!(aabb.br.x, 3);
+        assert_eq!(aabb.br.y, 4);
     }
 
     #[test]
     fn from_ref_works() {
         let aabb = AABB::from(&[1, 2, 3, 4]);
-        assert_eq!(aabb.x1, 1);
-        assert_eq!(aabb.y1, 2);
-        assert_eq!(aabb.x2, 3);
-        assert_eq!(aabb.y2, 4);
+        assert_eq!(aabb.tl.x, 1);
+        assert_eq!(aabb.tl.y, 2);
+        assert_eq!(aabb.br.x, 3);
+        assert_eq!(aabb.br.y, 4);
     }
 
     #[test]

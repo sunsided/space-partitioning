@@ -224,10 +224,10 @@ where
         element_index: free_list::IndexType,
         element: &QuadTreeElement<Id>,
     ) {
-        let insert_top = element.rect.y1 <= my;
-        let insert_bottom = element.rect.y2 > my;
-        let insert_left = element.rect.x1 <= mx;
-        let insert_right = element.rect.x2 > mx;
+        let insert_top = element.rect.tl.y <= my;
+        let insert_bottom = element.rect.br.y > my;
+        let insert_left = element.rect.tl.x <= mx;
+        let insert_right = element.rect.br.x > mx;
 
         if insert_top & insert_left {
             self.insert_element_in_child_node(first_child_index + 0, element_index);

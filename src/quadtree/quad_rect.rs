@@ -26,7 +26,7 @@ impl QuadRect {
     pub fn contains(&self, rect: &AABB) -> bool {
         let r = self.l + self.hx;
         let b = self.t + self.hy;
-        rect.x1 >= self.l && rect.x2 <= r && rect.y1 >= self.t && rect.y2 <= b
+        rect.tl.x >= self.l && rect.br.x <= r && rect.tl.y >= self.t && rect.br.y <= b
     }
 }
 

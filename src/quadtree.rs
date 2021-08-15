@@ -4,10 +4,12 @@ mod free_list;
 mod node;
 mod node_data;
 mod node_list;
+mod point;
 mod quad_rect;
 mod quadtree;
 
 pub use aabb::AABB;
+pub use point::Point;
 pub use quad_rect::QuadRect;
 pub use quadtree::{QuadTree, QuadTreeElement};
 
@@ -66,8 +68,7 @@ mod test {
         assert_eq!(inserted_ids.len(), count as usize);
     }
 
-    #[test]
-    fn find_works() {
+    fn build_test_tree() -> QuadTree {
         let quad_rect = QuadRect::new(-20, -20, 40, 40);
         let mut tree = QuadTree::new(quad_rect, 1);
         // top-left
@@ -98,6 +99,13 @@ mod test {
         assert!(inserted_ids.contains(&4000));
         assert!(inserted_ids.contains(&5000));
 
+        tree
+    }
+
+    #[test]
+    fn intersect_aabb_works() {
+        let tree = build_test_tree();
+
         // Select the top-left quadrant
         let quadrant_tl = AABB::new(-17, -17, 0, 0);
 
@@ -111,24 +119,24 @@ mod test {
     }
 
     #[test]
-    fn erase_last_works() {
-        let quad_rect = QuadRect::new(-20, -20, 40, 40);
-        let mut tree = QuadTree::new(quad_rect, 1);
-        // top-left
-        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
-        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
-        // top-right
-        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
-        // bottom-left
-        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
-        // bottom-right
-        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
-        // center
-        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+    fn intersect_generic_works() {
+        let tree = build_test_tree();
 
-        // Similar to index test.
-        assert_eq!(tree.collect_ids().len(), 6);
-        assert_eq!(tree.count_element_references(), 9);
+        // Select the top-left quadrant
+        let quadrant_tl = AABB::new(-17, -17, 0, 0);
+
+        // Perform the actual intersection.
+        let results = tree.intersect_generic(&quadrant_tl);
+        let results = Vec::from_iter(results);
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&1000));
+        assert!(!results.contains(&1001));
+        assert!(results.contains(&5000));
+    }
+
+    #[test]
+    fn erase_last_works() {
+        let mut tree = build_test_tree();
 
         // Erase the last-inserted node.
         assert!(tree.remove(&QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5))));
@@ -141,23 +149,7 @@ mod test {
 
     #[test]
     fn erase_first_works() {
-        let quad_rect = QuadRect::new(-20, -20, 40, 40);
-        let mut tree = QuadTree::new(quad_rect, 1);
-        // top-left
-        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
-        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
-        // top-right
-        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
-        // bottom-left
-        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
-        // bottom-right
-        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
-        // center
-        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
-
-        // Similar to index test.
-        assert_eq!(tree.collect_ids().len(), 6);
-        assert_eq!(tree.count_element_references(), 9);
+        let mut tree = build_test_tree();
 
         // Erase the first-inserted node.
         assert!(tree.remove(&QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5))));

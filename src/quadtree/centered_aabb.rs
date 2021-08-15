@@ -47,10 +47,10 @@ impl CenteredAABB {
         let mx = self.center_x;
         let my = self.center_y;
 
-        let explore_top = other.y1 <= my;
-        let explore_bottom = other.y2 > my;
-        let explore_left = other.x1 <= mx;
-        let explore_right = other.x2 > mx;
+        let explore_top = other.tl.y <= my;
+        let explore_bottom = other.br.y > my;
+        let explore_left = other.tl.x <= mx;
+        let explore_right = other.br.x > mx;
 
         Quadrants {
             top_left: explore_top & explore_left,
