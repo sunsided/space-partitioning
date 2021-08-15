@@ -10,7 +10,7 @@ use crate::quadtree::quad_rect::QuadRect;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 
-// TODO: Add range query
+// TODO: Add range query: Query using intersect_aabb() or intersect_generic()
 
 /// Each node must have less than the maximum allowed number of elements.
 const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tree
