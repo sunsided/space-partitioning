@@ -163,7 +163,7 @@ where
     }
 
     /// Gets the number of elements in the list.
-
+    #[allow(dead_code)]
     pub fn debug_len(&self) -> usize {
         #[cfg(debug_assertions)]
         return self.length;
@@ -171,6 +171,7 @@ where
         unimplemented!()
     }
 
+    #[allow(dead_code)]
     fn debug_is_in_free_list(&self, n: IndexType) -> bool {
         #[cfg(any(debug_assertions, test))]
         {

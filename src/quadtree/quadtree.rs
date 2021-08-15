@@ -10,6 +10,8 @@ use crate::quadtree::quad_rect::QuadRect;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 
+// TODO: Add range query
+
 /// Each node must have less than the maximum allowed number of elements.
 const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tree
 
@@ -599,6 +601,41 @@ where
         let aabb: AABB = self.root_rect.into();
         self.intersect_aabb(&aabb)
     }
+}
+
+#[cfg(test)]
+pub(crate) fn build_test_tree() -> QuadTree {
+    let quad_rect = QuadRect::new(-20, -20, 40, 40);
+    let mut tree = QuadTree::new(quad_rect, 1);
+    // top-left
+    tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
+    tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+    // top-right
+    tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+    // bottom-left
+    tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+    // bottom-right
+    tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+    // center
+    tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+
+    // The depth of 1 limits the tree to four quadrants.
+    // Each of the first five elements creates a single reference
+    // in each of the quadrants. The "center" element covers
+    // all four quadrants, and therefore adds another four references.
+    assert_eq!(tree.count_element_references(), 9);
+
+    // Ensure we have the exact elements inserted.
+    let inserted_ids = tree.collect_ids();
+    assert_eq!(inserted_ids.len(), 6);
+    assert!(inserted_ids.contains(&1000));
+    assert!(inserted_ids.contains(&1001));
+    assert!(inserted_ids.contains(&2000));
+    assert!(inserted_ids.contains(&3000));
+    assert!(inserted_ids.contains(&4000));
+    assert!(inserted_ids.contains(&5000));
+
+    tree
 }
 
 #[cfg(test)]
