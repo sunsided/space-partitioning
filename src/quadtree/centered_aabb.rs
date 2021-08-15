@@ -75,10 +75,10 @@ impl CenteredAABB {
         let r = mx + hx;
         let b = my + hy;
 
-        let top_left = AABB::new(l, t, l + hx, t + hy);
-        let top_right = AABB::new(r, t, r + hx, t + hy);
-        let bottom_left = AABB::new(l, b, l + hx, b + hy);
-        let bottom_right = AABB::new(r, b, r + hx, b + hy);
+        let top_left = AABB::new(l, t, mx, my);
+        let top_right = AABB::new(mx, t, r, my);
+        let bottom_left = AABB::new(l, my, mx, b);
+        let bottom_right = AABB::new(mx, my, r, b);
 
         Quadrants {
             top_left: other.intersects_with(&top_left),

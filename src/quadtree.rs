@@ -61,9 +61,6 @@ mod test {
                 y += 1;
             }
         }
-        assert_eq!(tree.count_element_references(), 1369 as usize);
-        let tree = tree;
-
         let inserted_ids = tree.collect_ids();
         assert_eq!(inserted_ids.len(), count as usize);
     }
@@ -158,5 +155,87 @@ mod test {
 
         // Since there are still populated child nodes, cleanup doesn't do anything.
         assert!(!tree.cleanup());
+    }
+
+    mod ray_box {
+        use super::*;
+        use crate::intersections::IntersectsWith;
+
+        struct Ray {
+            x: f32,
+            y: f32,
+            inv_dx: f32,
+            inv_dy: f32,
+        }
+
+        impl Ray {
+            fn new(x: f32, y: f32, dx: f32, dy: f32) -> Ray {
+                Ray {
+                    x,
+                    y,
+                    inv_dx: 1.0 / dx,
+                    inv_dy: 1.0 / dy,
+                }
+            }
+        }
+
+        impl IntersectsWith<AABB> for Ray {
+            fn intersects_with(&self, other: &AABB) -> bool {
+                // https://gamedev.stackexchange.com/a/18459/10433
+
+                let mut t1 = (other.tl.x as f32 - self.x) * self.inv_dx;
+                let mut t2 = (other.br.x as f32 - self.x) * self.inv_dx;
+                let mut t3 = (other.br.y as f32 - self.y) * self.inv_dy;
+                let mut t4 = (other.tl.y as f32 - self.y) * self.inv_dy;
+
+                let tmin = t1.min(t2).max(t3.min(t4));
+                let tmax = t1.max(t2).min(t3.max(t4));
+
+                // if tmax < 0, ray (line) is intersecting AABB, but the whole AABB is behind us
+                // if tmin > tmax, ray doesn't intersect AABB
+                if (tmax < 0.) | (tmin > tmax) {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        #[test]
+        fn ray_box_intersection_works() {
+            let r#box = AABB::new(-5, -5, 5, 5);
+            let ray_in_box_pointing_up = Ray::new(0., 0., 0., 1.);
+            let ray_on_left_pointing_right = Ray::new(-10., 0., 1., 0.);
+            let ray_on_right_pointing_right = Ray::new(10., 0., 1., 0.);
+            let ray_on_right_pointing_left = Ray::new(10., 0., -1., 0.);
+            let ray_on_top_pointing_right = Ray::new(10., -10., 1., 0.);
+            let ray_on_bottom_pointing_right = Ray::new(10., 10., 1., 0.);
+            assert!(ray_in_box_pointing_up.intersects_with(&r#box));
+            assert!(ray_on_left_pointing_right.intersects_with(&r#box));
+            assert!(ray_on_right_pointing_left.intersects_with(&r#box));
+            assert!(!ray_on_right_pointing_right.intersects_with(&r#box));
+            assert!(!ray_on_top_pointing_right.intersects_with(&r#box));
+            assert!(!ray_on_bottom_pointing_right.intersects_with(&r#box));
+
+            let diagonal_ray = Ray::new(-10., 0., 1., 0.1);
+            assert!(diagonal_ray.intersects_with(&r#box));
+        }
+
+        #[test]
+        fn tree_ray_between_elements_does_not_intersect() {
+            let tree = build_test_tree();
+            let ray = Ray::new(1., 5., 1., 0.);
+            let results = tree.intersect_generic(&ray);
+            assert_eq!(results.len(), 0);
+        }
+
+        #[test]
+        fn tree_ray_does_intersect() {
+            let tree = build_test_tree();
+            let ray = Ray::new(1., 8., 1., 0.);
+            let results = tree.intersect_generic(&ray);
+            assert_eq!(results.len(), 1);
+            assert!(results.contains(&4000));
+        }
     }
 }

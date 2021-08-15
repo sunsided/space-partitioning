@@ -75,13 +75,6 @@ where
     pub fn new(id: Id, rect: AABB) -> Self {
         Self { id, rect }
     }
-
-    pub fn new_xy(id: Id, x1: i32, y1: i32, x2: i32, y2: i32) -> Self {
-        Self {
-            id,
-            rect: AABB::new(x1, y1, x2, y2),
-        }
-    }
 }
 
 impl<Id> QuadTree<Id>
@@ -370,13 +363,13 @@ where
                 to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
             }
             if quadrants.top_right {
-                to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
+                to_process.push_back(NodeData::new(mx, t, hx, hy, fc + 1, nd.depth + 1));
             }
             if quadrants.bottom_left {
-                to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
+                to_process.push_back(NodeData::new(l, hx, hx, hy, fc + 2, nd.depth + 1));
             }
             if quadrants.bottom_right {
-                to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
+                to_process.push_back(NodeData::new(mx, hx, hx, hy, fc + 3, nd.depth + 1));
             }
         }
 
@@ -419,13 +412,13 @@ where
                 to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
             }
             if quadrants.top_right {
-                to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
+                to_process.push_back(NodeData::new(mx, t, hx, hy, fc + 1, nd.depth + 1));
             }
             if quadrants.bottom_left {
-                to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
+                to_process.push_back(NodeData::new(l, my, hx, hy, fc + 2, nd.depth + 1));
             }
             if quadrants.bottom_right {
-                to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
+                to_process.push_back(NodeData::new(mx, my, hx, hy, fc + 3, nd.depth + 1));
             }
         }
 
