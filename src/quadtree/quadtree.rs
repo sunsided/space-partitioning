@@ -1,5 +1,6 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
+use crate::quadtree::centered_aabb::Quadrants;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
 use crate::quadtree::node::{Node, NodeElementCountType};
@@ -15,15 +16,21 @@ const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tre
 /// We use this value to determine whether a node can be split.
 const SMALLEST_CELL_SIZE: i32 = 1; // TODO: Make parameter of tree
 
+/// Alias for all traits required for an element ID.
+pub trait ElementIdType: Default + std::cmp::Eq + std::hash::Hash + Copy {}
+
+/// Helper implementation to automatically derive the [`ElementIdType`] trait
+impl<T> ElementIdType for T where T: Default + std::cmp::Eq + std::hash::Hash + Copy {}
+
 /// Represents an element in the QuadTree.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
-pub struct QuadTreeElement<Id = u32>
+pub struct QuadTreeElement<ElementId = u32>
 where
-    Id: Default,
+    ElementId: ElementIdType,
 {
     // TODO: Split element into two structs: One containing the ID, another one containing the coordinates only. This allows aligning the elements much better. Benchmark!
     /// Stores the ID for the element (can be used to refer to external data).
-    pub id: Id,
+    pub id: ElementId,
     /// The axis-aligned bounding box of the element.
     rect: AABB,
 }
@@ -43,13 +50,17 @@ struct QuadTreeElementNode {
     element_idx: free_list::IndexType,
 }
 
-pub struct QuadTree<Id = u32>
+/// A QuadTree implementation as described in [Efficient Quadtrees](https://stackoverflow.com/a/48330314/195651).
+///
+/// # Remarks
+/// This tree uses integral coordinates only in order to speed up box-box intersection tests.
+pub struct QuadTree<ElementId = u32>
 where
-    Id: Default + std::cmp::Eq + Copy,
+    ElementId: ElementIdType,
 {
     /// Stores all the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
-    elements: FreeList<QuadTreeElement<Id>>,
+    elements: FreeList<QuadTreeElement<ElementId>>,
     /// Stores all the element nodes in the quadtree.
     /// For each cell occupied by a `QuadTreeElement`, we store
     /// a `QuadTreeElementNode`.
@@ -68,28 +79,23 @@ where
     max_depth: u32,
 }
 
-impl<Id> QuadTreeElement<Id>
+impl<ElementId> QuadTreeElement<ElementId>
 where
-    Id: Default,
+    ElementId: ElementIdType,
 {
-    pub fn new(id: Id, rect: AABB) -> Self {
+    pub fn new(id: ElementId, rect: AABB) -> Self {
         Self { id, rect }
     }
 }
 
-impl<Id> QuadTree<Id>
+impl<ElementId> QuadTree<ElementId>
 where
-    Id: Default + std::cmp::Eq + std::hash::Hash + Copy,
+    ElementId: ElementIdType,
 {
     pub fn default() -> Self {
         Self::new(QuadRect::default(), 8)
     }
-}
 
-impl<Id> QuadTree<Id>
-where
-    Id: Default + std::cmp::Eq + std::hash::Hash + Copy,
-{
     pub fn new(root_rect: QuadRect, max_depth: u32) -> Self {
         Self {
             elements: FreeList::default(),
@@ -101,7 +107,7 @@ where
         }
     }
 
-    pub fn insert(&mut self, element: QuadTreeElement<Id>) {
+    pub fn insert(&mut self, element: QuadTreeElement<ElementId>) {
         let element_coords = &element.rect;
         assert!(self.root_rect.contains(element_coords));
 
@@ -215,7 +221,7 @@ where
         my: i32,
         first_child_index: free_list::IndexType,
         element_index: free_list::IndexType,
-        element: &QuadTreeElement<Id>,
+        element: &QuadTreeElement<ElementId>,
     ) {
         let insert_top = element.rect.tl.y <= my;
         let insert_bottom = element.rect.br.y > my;
@@ -246,7 +252,16 @@ where
         node.element_count += 1;
     }
 
-    pub fn remove(&mut self, element: &QuadTreeElement<Id>) -> bool {
+    /// Removes the specified element.
+    ///
+    /// # Remarks
+    /// The element is located using its bounding box and identified using the ID.
+    /// Because of that, the bounding box of the element must not change until is was
+    /// removed from the tree.
+    ///
+    /// # Arguments
+    /// * [`element`] - The element to remove.
+    pub fn remove(&mut self, element: &QuadTreeElement<ElementId>) -> bool {
         // Find the leaves containing the node.
         let element_coords = &element.rect;
         let root = self.get_root_node_data();
@@ -330,6 +345,7 @@ where
         }
     }
 
+    // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
     fn find_leaves_aabb(&self, root: NodeData, rect: &AABB) -> NodeList {
         let mut leaves = NodeList::default(); // TODO: extract / pool?
         let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
@@ -348,34 +364,13 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_aabb(rect);
-
-            let mx = nd.crect.center_x;
-            let my = nd.crect.center_y;
-            let hx = nd.crect.width >> 1;
-            let hy = nd.crect.height >> 1;
-
-            let l = mx - hx;
-            let t = my - hy;
-            let r = mx + hx;
-            let b = my + hy;
-
-            if quadrants.top_left {
-                to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
-            }
-            if quadrants.top_right {
-                to_process.push_back(NodeData::new(mx, t, hx, hy, fc + 1, nd.depth + 1));
-            }
-            if quadrants.bottom_left {
-                to_process.push_back(NodeData::new(l, hx, hx, hy, fc + 2, nd.depth + 1));
-            }
-            if quadrants.bottom_right {
-                to_process.push_back(NodeData::new(mx, hx, hx, hy, fc + 3, nd.depth + 1));
-            }
+            Self::collect_relevant_quadrants(&mut to_process, nd, fc, quadrants)
         }
 
         leaves
     }
 
+    // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
     fn find_leaves_generic<T>(&self, root: NodeData, element: &T) -> NodeList
     where
         T: IntersectsWith<AABB>,
@@ -397,34 +392,73 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_generic(element);
-
-            let mx = nd.crect.center_x;
-            let my = nd.crect.center_y;
-            let hx = nd.crect.width >> 1;
-            let hy = nd.crect.height >> 1;
-
-            let l = mx - hx;
-            let t = my - hy;
-            let r = mx + hx;
-            let b = my + hy;
-
-            if quadrants.top_left {
-                to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
-            }
-            if quadrants.top_right {
-                to_process.push_back(NodeData::new(mx, t, hx, hy, fc + 1, nd.depth + 1));
-            }
-            if quadrants.bottom_left {
-                to_process.push_back(NodeData::new(l, my, hx, hy, fc + 2, nd.depth + 1));
-            }
-            if quadrants.bottom_right {
-                to_process.push_back(NodeData::new(mx, my, hx, hy, fc + 3, nd.depth + 1));
-            }
+            Self::collect_relevant_quadrants(&mut to_process, nd, fc, quadrants)
         }
 
         leaves
     }
 
+    fn collect_relevant_quadrants(
+        to_process: &mut NodeList,
+        nd: NodeData,
+        first_child_id: u32,
+        quadrants: Quadrants,
+    ) {
+        let mx = nd.crect.center_x;
+        let my = nd.crect.center_y;
+        let hx = nd.crect.width >> 1;
+        let hy = nd.crect.height >> 1;
+
+        let l = mx - hx;
+        let t = my - hy;
+
+        if quadrants.top_left {
+            to_process.push_back(NodeData::new(
+                l,
+                t,
+                hx,
+                hy,
+                first_child_id + 0,
+                nd.depth + 1,
+            ));
+        }
+        if quadrants.top_right {
+            to_process.push_back(NodeData::new(
+                mx,
+                t,
+                hx,
+                hy,
+                first_child_id + 1,
+                nd.depth + 1,
+            ));
+        }
+        if quadrants.bottom_left {
+            to_process.push_back(NodeData::new(
+                l,
+                hx,
+                hx,
+                hy,
+                first_child_id + 2,
+                nd.depth + 1,
+            ));
+        }
+        if quadrants.bottom_right {
+            to_process.push_back(NodeData::new(
+                mx,
+                hx,
+                hx,
+                hy,
+                first_child_id + 3,
+                nd.depth + 1,
+            ));
+        }
+    }
+
+    /// Prunes unused child nodes from the tree.
+    ///
+    /// # Remarks
+    /// The tree is never pruned automatically for performance reasons. Call
+    /// this method after all elements were removed or updated.
     pub fn cleanup(&mut self) -> bool {
         // Only process the root if it is not a leaf.
         if self.nodes[0].is_leaf() {
@@ -510,7 +544,7 @@ where
     ///
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
-    pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<Id> {
+    pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
         let root = self.get_root_node_data();
         let leaves = self.find_leaves_aabb(root, rect);
         self.intersect_from_leaves(rect, leaves)
@@ -521,7 +555,7 @@ where
     ///
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
-    pub fn intersect_generic<T>(&self, element: &T) -> HashSet<Id>
+    pub fn intersect_generic<T>(&self, element: &T) -> HashSet<ElementId>
     where
         T: IntersectsWith<AABB>,
     {
@@ -530,7 +564,7 @@ where
         self.intersect_from_leaves(element, leaves)
     }
 
-    fn intersect_from_leaves<T>(&self, rect: &T, mut leaves: NodeList) -> HashSet<Id>
+    fn intersect_from_leaves<T>(&self, rect: &T, mut leaves: NodeList) -> HashSet<ElementId>
     where
         T: IntersectsWith<AABB>,
     {
@@ -561,7 +595,7 @@ where
     }
 
     /// Collects all element IDs stored in the tree by visiting all cells.
-    pub(crate) fn collect_ids(&self) -> HashSet<Id> {
+    pub(crate) fn collect_ids(&self) -> HashSet<ElementId> {
         let aabb: AABB = self.root_rect.into();
         self.intersect_aabb(&aabb)
     }

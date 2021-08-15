@@ -1,7 +1,5 @@
 use std::mem::ManuallyDrop;
 
-// https://stackoverflow.com/a/48330314/195651
-
 pub(crate) type IndexType = u32;
 pub(crate) const SENTINEL: IndexType = IndexType::MAX;
 
@@ -131,11 +129,6 @@ where
         {
             self.length = 0;
         }
-    }
-
-    /// Tests whether the specified index indicates the end of a linked list.
-    pub fn is_end_of_list(index: IndexType) -> bool {
-        index == SENTINEL
     }
 
     /// Gets a reference to the value at the specified index.
