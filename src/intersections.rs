@@ -1,3 +1,3 @@
-mod intersects;
+mod intersects_with;
 
-pub use intersects::Intersects;
+pub use intersects_with::IntersectsWith;

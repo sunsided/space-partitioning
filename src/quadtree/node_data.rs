@@ -1,4 +1,4 @@
-use crate::quadtree::centered_aabb::{CenteredAABB, FromLeftTopWidthHeight};
+use crate::quadtree::centered_aabb::CenteredAABB;
 use crate::quadtree::quad_rect::QuadRect;
 
 pub type NodeIndexType = u32;
@@ -8,7 +8,7 @@ pub struct NodeData {
     /// The index of the `Node` described by this `NodeData` instance.
     pub index: NodeIndexType,
     /// The centered AABB of the the node: center x, center y, width and height.
-    pub crect: CenteredAABB<i32>,
+    pub crect: CenteredAABB,
     /// The depth of the node.
     pub depth: u32,
 }

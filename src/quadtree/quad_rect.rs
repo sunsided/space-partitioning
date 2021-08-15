@@ -1,5 +1,5 @@
 use crate::quadtree::aabb::AABB;
-use crate::quadtree::centered_aabb::{CenteredAABB, FromLeftTopWidthHeight};
+use crate::quadtree::centered_aabb::CenteredAABB;
 
 /// A rectangle describing the extents of the QuadTree.
 ///

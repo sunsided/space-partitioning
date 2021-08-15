@@ -1,4 +1,4 @@
-pub trait Intersects<T = Self> {
+pub trait IntersectsWith<T = Self> {
     /// Tests whether this element intersects with the [`other`].
     ///
     /// # Returns

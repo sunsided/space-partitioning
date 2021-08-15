@@ -1,4 +1,4 @@
-use crate::intersections::Intersects;
+use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
@@ -122,7 +122,7 @@ where
             let node_data = to_process.pop().unwrap();
 
             // Find the leaves
-            let mut leaves = self.find_leaves_from_root(node_data, element_coords);
+            let mut leaves = self.find_leaves_aabb(node_data, element_coords);
 
             while !leaves.is_empty() {
                 let leaf = leaves.pop_back();
@@ -261,7 +261,7 @@ where
         // The index of the element (if it was found).
         let mut found_element_idx = free_list::SENTINEL;
 
-        let mut leaves = self.find_leaves_from_root(root, element_coords);
+        let mut leaves = self.find_leaves_aabb(root, element_coords);
         while !leaves.is_empty() {
             let leaf = leaves.pop_back();
             let leaf_node_data = self.nodes[leaf.index as usize];
@@ -337,7 +337,7 @@ where
         }
     }
 
-    fn find_leaves_from_root(&self, root: NodeData, rect: &AABB) -> NodeList {
+    fn find_leaves_aabb(&self, root: NodeData, rect: &AABB) -> NodeList {
         let mut leaves = NodeList::default(); // TODO: extract / pool?
         let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
         to_process.push_back(root);
@@ -351,33 +351,81 @@ where
                 continue;
             }
 
+            let fc = self.nodes[nd.index as usize].get_first_child_node_index();
+
             // Otherwise push the children that intersect the rectangle.
+            let quadrants = nd.crect.explore_quadrants_aabb(rect);
+
             let mx = nd.crect.center_x;
             let my = nd.crect.center_y;
             let hx = nd.crect.width >> 1;
             let hy = nd.crect.height >> 1;
-            let fc = self.nodes[nd.index as usize].get_first_child_node_index();
+
             let l = mx - hx;
             let t = my - hy;
             let r = mx + hx;
             let b = my + hy;
 
-            // TODO: Inserting a very large element over many very small ones could yield a lot of nodes.
-            if rect.y1 <= my {
-                if rect.x1 <= mx {
-                    to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
-                }
-                if rect.x2 > mx {
-                    to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
-                }
+            if quadrants.top_left {
+                to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
             }
-            if rect.y2 > my {
-                if rect.x1 <= mx {
-                    to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
-                }
-                if rect.x2 > mx {
-                    to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
-                }
+            if quadrants.top_right {
+                to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
+            }
+            if quadrants.bottom_left {
+                to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
+            }
+            if quadrants.bottom_right {
+                to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
+            }
+        }
+
+        leaves
+    }
+
+    fn find_leaves_generic<T>(&self, root: NodeData, element: &T) -> NodeList
+    where
+        T: IntersectsWith<AABB>,
+    {
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        to_process.push_back(root);
+
+        while to_process.len() > 0 {
+            let nd = to_process.pop_back();
+
+            // If this node is a leaf, insert it to the list.
+            if self.nodes[nd.index as usize].is_leaf() {
+                leaves.push_back(nd);
+                continue;
+            }
+
+            let fc = self.nodes[nd.index as usize].get_first_child_node_index();
+
+            // Otherwise push the children that intersect the rectangle.
+            let quadrants = nd.crect.explore_quadrants_generic(element);
+
+            let mx = nd.crect.center_x;
+            let my = nd.crect.center_y;
+            let hx = nd.crect.width >> 1;
+            let hy = nd.crect.height >> 1;
+
+            let l = mx - hx;
+            let t = my - hy;
+            let r = mx + hx;
+            let b = my + hy;
+
+            if quadrants.top_left {
+                to_process.push_back(NodeData::new(l, t, hx, hy, fc + 0, nd.depth + 1));
+            }
+            if quadrants.top_right {
+                to_process.push_back(NodeData::new(r, t, hx, hy, fc + 1, nd.depth + 1));
+            }
+            if quadrants.bottom_left {
+                to_process.push_back(NodeData::new(l, b, hx, hy, fc + 2, nd.depth + 1));
+            }
+            if quadrants.bottom_right {
+                to_process.push_back(NodeData::new(r, b, hx, hy, fc + 3, nd.depth + 1));
             }
         }
 
@@ -469,10 +517,30 @@ where
     ///
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
-    pub fn intersect(&self, rect: &AABB) -> HashSet<Id> {
+    pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<Id> {
         let root = self.get_root_node_data();
-        let mut leaves = self.find_leaves_from_root(root, rect);
+        let leaves = self.find_leaves_aabb(root, rect);
+        self.intersect_from_leaves(rect, leaves)
+    }
 
+    /// Returns the set of IDs that occupy space within the
+    /// specified bounding box.
+    ///
+    /// # Arguments
+    /// * [`rect`] - The rectangle to test for.
+    pub fn intersect_generic<T>(&self, element: &T) -> HashSet<Id>
+    where
+        T: IntersectsWith<AABB>,
+    {
+        let root = self.get_root_node_data();
+        let leaves = self.find_leaves_generic(root, element);
+        self.intersect_from_leaves(element, leaves)
+    }
+
+    fn intersect_from_leaves<T>(&self, rect: &T, mut leaves: NodeList) -> HashSet<Id>
+    where
+        T: IntersectsWith<AABB>,
+    {
         let capacity = leaves.len() * MAX_NUM_ELEMENTS as usize;
         let mut node_set = HashSet::with_capacity(capacity);
 
@@ -488,7 +556,7 @@ where
 
                 // Depending on the size of the quadrant, the candidate element
                 // might still not be covered by the search rectangle.
-                if elem.rect.intersects_with(rect) {
+                if rect.intersects_with(&elem.rect) {
                     let _was_known = node_set.insert(elem.id);
                 }
 
@@ -501,15 +569,14 @@ where
 
     /// Collects all element IDs stored in the tree by visiting all cells.
     pub(crate) fn collect_ids(&self) -> HashSet<Id> {
-        let aabb = self.root_rect.into();
-        self.intersect(&aabb)
+        let aabb: AABB = self.root_rect.into();
+        self.intersect_aabb(&aabb)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::iter::FromIterator;
 
     #[test]
     fn cleanup_works() {

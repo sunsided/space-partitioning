@@ -1,4 +1,4 @@
-use crate::intersections::Intersects;
+use crate::intersections::IntersectsWith;
 
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
@@ -27,7 +27,7 @@ impl AABB {
     }
 }
 
-impl Intersects<AABB> for AABB {
+impl IntersectsWith<AABB> for AABB {
     /// Tests whether this [`AABB`] intersects with another one.
     ///
     /// # Remarks

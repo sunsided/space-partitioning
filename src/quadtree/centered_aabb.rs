@@ -1,33 +1,32 @@
+use crate::intersections::IntersectsWith;
+use crate::quadtree::AABB;
 use std::ops::Index;
 
 /// A centered axis-aligned bounding box.
 #[derive(Debug, Default)]
-pub struct CenteredAABB<T = i32> {
+pub struct CenteredAABB {
     /// The center X coordinate.
-    pub center_x: T,
+    pub center_x: i32,
     /// The center Y coordinate.
-    pub center_y: T,
+    pub center_y: i32,
     /// The width.
-    pub width: T,
+    pub width: i32,
     /// The height.
-    pub height: T,
+    pub height: i32,
 }
 
-impl<T> Index<usize> for CenteredAABB<T> {
-    type Output = T;
+impl Index<usize> for CenteredAABB {
+    type Output = i32;
 
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < 4);
-        let ptr = self as *const _ as *const [T; 4];
+        let ptr = self as *const _ as *const [i32; 4];
         unsafe { &(*ptr)[index] }
     }
 }
 
-impl<T> CenteredAABB<T>
-where
-    T: Copy,
-{
-    pub fn from_center_xy_wh(center_x: T, center_y: T, width: T, height: T) -> Self {
+impl CenteredAABB {
+    pub fn from_center_xy_wh(center_x: i32, center_y: i32, width: i32, height: i32) -> Self {
         Self {
             center_x,
             center_y,
@@ -35,28 +34,66 @@ where
             height,
         }
     }
-}
 
-pub trait FromLeftTopWidthHeight<T> {
-    fn from_ltwh(left: T, top: T, width: T, height: T) -> CenteredAABB<T>;
-}
-
-impl FromLeftTopWidthHeight<i32> for CenteredAABB<i32> {
     #[inline]
-    fn from_ltwh(left: i32, top: i32, width: i32, height: i32) -> Self {
+    pub fn from_ltwh(left: i32, top: i32, width: i32, height: i32) -> Self {
         let mx = left + (width >> 1);
         let my = top + (height >> 1);
         Self::from_center_xy_wh(mx, my, width, height)
     }
+
+    // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
+    pub fn explore_quadrants_aabb(&self, other: &AABB) -> Quadrants {
+        let mx = self.center_x;
+        let my = self.center_y;
+
+        let explore_top = other.y1 <= my;
+        let explore_bottom = other.y2 > my;
+        let explore_left = other.x1 <= mx;
+        let explore_right = other.x2 > mx;
+
+        Quadrants {
+            top_left: explore_top & explore_left,
+            top_right: explore_top & explore_right,
+            bottom_left: explore_bottom & explore_left,
+            bottom_right: explore_bottom & explore_right,
+        }
+    }
+
+    // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
+    pub fn explore_quadrants_generic<T>(&self, other: &T) -> Quadrants
+    where
+        T: IntersectsWith<AABB>,
+    {
+        let mx = self.center_x;
+        let my = self.center_y;
+        let hx = self.width >> 1;
+        let hy = self.height >> 1;
+
+        let l = mx - hx;
+        let t = my - hy;
+        let r = mx + hx;
+        let b = my + hy;
+
+        let top_left = AABB::new(l, t, l + hx, t + hy);
+        let top_right = AABB::new(r, t, r + hx, t + hy);
+        let bottom_left = AABB::new(l, b, l + hx, b + hy);
+        let bottom_right = AABB::new(r, b, r + hx, b + hy);
+
+        Quadrants {
+            top_left: other.intersects_with(&top_left),
+            top_right: other.intersects_with(&top_right),
+            bottom_left: other.intersects_with(&bottom_left),
+            bottom_right: other.intersects_with(&bottom_right),
+        }
+    }
 }
 
-impl FromLeftTopWidthHeight<f32> for CenteredAABB<f32> {
-    #[inline]
-    fn from_ltwh(left: f32, top: f32, width: f32, height: f32) -> Self {
-        let mx = left + (width * 0.5f32);
-        let my = top + (height * 0.5f32);
-        Self::from_center_xy_wh(mx, my, width, height)
-    }
+pub struct Quadrants {
+    pub top_left: bool,
+    pub top_right: bool,
+    pub bottom_left: bool,
+    pub bottom_right: bool,
 }
 
 #[cfg(test)]
@@ -64,30 +101,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn aabb_u8_is_4_bytes() {
-        assert_eq!(std::mem::size_of::<CenteredAABB<u8>>(), 4);
-    }
-
-    #[test]
-    fn aabb_i16_is_8_bytes() {
-        assert_eq!(std::mem::size_of::<CenteredAABB<i16>>(), 8);
-    }
-
-    #[test]
     fn aabb_i32_is_16_bytes() {
-        assert_eq!(std::mem::size_of::<CenteredAABB<i32>>(), 16);
+        assert_eq!(std::mem::size_of::<CenteredAABB>(), 16);
     }
-
-    #[test]
-    fn aabb_f32_is_16_bytes() {
-        assert_eq!(std::mem::size_of::<CenteredAABB<f32>>(), 16);
-    }
-
-    #[test]
-    fn aabb_f64_is_32_bytes() {
-        assert_eq!(std::mem::size_of::<CenteredAABB<f64>>(), 32);
-    }
-
     #[test]
     fn from_ltwh_index_i32_works() {
         let aabb = CenteredAABB::from_ltwh(-5, 0, 30, 40);
@@ -104,14 +120,5 @@ mod test {
         assert_eq!(aabb[1], 20);
         assert_eq!(aabb[2], 30);
         assert_eq!(aabb[3], 40);
-    }
-
-    #[test]
-    fn index_f64_works() {
-        let aabb = CenteredAABB::from_center_xy_wh(10.0, 20.0, 30.0, 40.0);
-        assert_eq!(aabb[0], 10.0);
-        assert_eq!(aabb[1], 20.0);
-        assert_eq!(aabb[2], 30.0);
-        assert_eq!(aabb[3], 40.0);
     }
 }

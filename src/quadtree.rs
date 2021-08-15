@@ -88,7 +88,7 @@ mod test {
         // all four quadrants, and therefore adds another four references.
         assert_eq!(tree.count_element_references(), 9);
 
-        /// Ensure we have the exact elements inserted.
+        // Ensure we have the exact elements inserted.
         let inserted_ids = tree.collect_ids();
         assert_eq!(inserted_ids.len(), 6);
         assert!(inserted_ids.contains(&1000));
@@ -102,7 +102,7 @@ mod test {
         let quadrant_tl = AABB::new(-17, -17, 0, 0);
 
         // Perform the actual intersection.
-        let results = tree.intersect(&quadrant_tl);
+        let results = tree.intersect_aabb(&quadrant_tl);
         let results = Vec::from_iter(results);
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1000));
