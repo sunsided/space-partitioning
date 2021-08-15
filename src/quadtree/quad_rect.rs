@@ -1,3 +1,4 @@
+use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
 use crate::quadtree::centered_aabb::CenteredAABB;
 
@@ -24,9 +25,12 @@ impl QuadRect {
     }
 
     pub fn contains(&self, rect: &AABB) -> bool {
+        let mx = (rect.tl.x + rect.br.x) >> 1;
+        let my = (rect.tl.y + rect.br.y) >> 1;
+
         let r = self.l + self.hx;
         let b = self.t + self.hy;
-        rect.tl.x >= self.l && rect.br.x <= r && rect.tl.y >= self.t && rect.br.y <= b
+        mx >= self.l && mx <= r && my >= self.t && my <= b
     }
 }
 
