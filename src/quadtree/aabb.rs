@@ -1,5 +1,6 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::Point;
+use std::ops::Add;
 
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
@@ -67,6 +68,18 @@ impl IntersectsWith<AABB> for AABB {
         let d_intersects = is_degenerate & d_a & d_b;
 
         intersects | d_intersects
+    }
+}
+
+impl Add for AABB {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let min_x = self.tl.x.min(rhs.tl.x);
+        let min_y = self.tl.y.min(rhs.tl.y);
+        let max_x = self.br.x.max(rhs.br.x);
+        let max_y = self.br.y.max(rhs.br.y);
+        AABB::new(min_x, min_y, max_x, max_y)
     }
 }
 
