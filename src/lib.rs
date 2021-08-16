@@ -1,4 +1,4 @@
-mod intersections;
+pub mod intersections;
 pub mod interval_tree;
 pub mod quadtree;
 
