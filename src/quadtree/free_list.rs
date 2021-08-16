@@ -77,6 +77,8 @@ where
             return;
         }
         debug_assert!(!self.debug_is_in_free_list(n));
+
+        #[cfg(debug_assertions)]
         debug_assert!(self.length > 0);
 
         unsafe { ManuallyDrop::drop(&mut self.data[n as usize].element) };
