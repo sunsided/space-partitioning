@@ -437,7 +437,7 @@ where
         if quadrants.bottom_left {
             to_process.push_back(NodeData::new(
                 l,
-                hx,
+                my,
                 hx,
                 hy,
                 first_child_id + 2,
@@ -447,7 +447,7 @@ where
         if quadrants.bottom_right {
             to_process.push_back(NodeData::new(
                 mx,
-                hx,
+                my,
                 hx,
                 hy,
                 first_child_id + 3,
