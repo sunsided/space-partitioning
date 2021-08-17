@@ -1,12 +1,14 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
-use crate::quadtree::centered_aabb::Quadrants;
+use crate::quadtree::error::InsertError;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
 use crate::quadtree::node::{Node, NodeElementCountType};
 use crate::quadtree::node_data::{NodeData, NodeIndexType};
+use crate::quadtree::node_info::NodeInfo;
 use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
+use crate::quadtree::quadrants::Quadrants;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 
@@ -34,7 +36,7 @@ where
     /// Stores the ID for the element (can be used to refer to external data).
     pub id: ElementId,
     /// The axis-aligned bounding box of the element.
-    rect: AABB,
+    pub rect: AABB,
 }
 
 /// Represents an element node in the quadtree.
@@ -109,9 +111,11 @@ where
         }
     }
 
-    pub fn insert(&mut self, element: QuadTreeElement<ElementId>) {
+    pub fn insert(&mut self, element: QuadTreeElement<ElementId>) -> Result<(), InsertError> {
         let element_coords = &element.rect;
-        assert!(self.root_rect.contains(element_coords));
+        if !self.root_rect.contains(element_coords) {
+            return Err(InsertError::OutOfBounds);
+        }
 
         // Insert the actual element.
         let element_idx = self.elements.insert(element);
@@ -156,6 +160,8 @@ where
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Splits the specified [`parent`] node into four and distributes its
@@ -275,7 +281,11 @@ where
         while !leaves.is_empty() {
             let leaf = leaves.pop_back();
             let leaf_node_data = self.nodes[leaf.index as usize];
-            debug_assert!(leaf_node_data.element_count >= 1);
+
+            // The user may try to remove an element that was not in the tree (anymore).
+            if leaf_node_data.element_count == 0 {
+                continue;
+            }
 
             // Used for debug assertion.
             let mut element_found = false;
@@ -334,9 +344,11 @@ where
             let node = &mut self.nodes[leaf.index as usize];
             node.first_child_or_element = new_first_child_or_element;
 
-            debug_assert!(element_found);
-            debug_assert!(node.element_count > 0);
-            node.element_count -= 1;
+            // The user may try to remove an element that was not in the tree (anymore).
+            if element_found {
+                debug_assert!(node.element_count > 0);
+                node.element_count -= 1;
+            }
         }
 
         if found_element_idx != free_list::SENTINEL {
@@ -400,6 +412,27 @@ where
         leaves
     }
 
+    pub fn visit_leaves<F>(&self, mut visit: F)
+    where
+        F: FnMut(NodeInfo),
+    {
+        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        to_process.push_back(self.get_root_node_data());
+
+        while to_process.len() > 0 {
+            let nd = to_process.pop_back();
+
+            let node = &self.nodes[nd.index as usize];
+            if node.is_leaf() {
+                visit(NodeInfo::from(nd, node.element_count));
+                continue;
+            }
+
+            let fc = self.nodes[nd.index as usize].get_first_child_node_index();
+            Self::collect_relevant_quadrants(&mut to_process, nd, fc, Quadrants::all())
+        }
+    }
+
     fn collect_relevant_quadrants(
         to_process: &mut NodeList,
         nd: NodeData,
@@ -437,7 +470,7 @@ where
         if quadrants.bottom_left {
             to_process.push_back(NodeData::new(
                 l,
-                hx,
+                my,
                 hx,
                 hy,
                 first_child_id + 2,
@@ -447,7 +480,7 @@ where
         if quadrants.bottom_right {
             to_process.push_back(NodeData::new(
                 mx,
-                hx,
+                my,
                 hx,
                 hy,
                 first_child_id + 3,
@@ -482,6 +515,8 @@ where
             for j in 0..4 {
                 let child_index = first_child_index + j;
                 let child = &self.nodes[child_index as usize];
+
+                // TODO: Compact nodes when the number of elements in child is less than allowed maximum.
 
                 // Increment empty leaf count if the child is an empty
                 // leaf. Otherwise if the child is a branch, add it to

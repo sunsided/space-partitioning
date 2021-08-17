@@ -1,4 +1,5 @@
 use crate::intersections::IntersectsWith;
+use crate::quadtree::quadrants::Quadrants;
 use crate::quadtree::AABB;
 use std::ops::Index;
 
@@ -87,13 +88,23 @@ impl CenteredAABB {
             bottom_right: other.intersects_with(&bottom_right),
         }
     }
+
+    pub fn get_aabb(&self) -> AABB {
+        let hx = self.width >> 1;
+        let hy = self.height >> 1;
+        AABB::new(
+            self.center_x - hx,
+            self.center_y - hy,
+            self.center_x + hx,
+            self.center_y + hy,
+        )
+    }
 }
 
-pub struct Quadrants {
-    pub top_left: bool,
-    pub top_right: bool,
-    pub bottom_left: bool,
-    pub bottom_right: bool,
+impl Into<AABB> for CenteredAABB {
+    fn into(self) -> AABB {
+        self.get_aabb()
+    }
 }
 
 #[cfg(test)]

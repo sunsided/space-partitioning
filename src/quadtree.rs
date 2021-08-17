@@ -1,14 +1,18 @@
 mod aabb;
 mod centered_aabb;
+mod error;
 mod free_list;
 mod node;
 mod node_data;
+mod node_info;
 mod node_list;
 mod point;
 mod quad_rect;
+mod quadrants;
 mod quadtree;
 
 pub use aabb::AABB;
+pub use node_info::NodeInfo;
 pub use point::Point;
 pub use quad_rect::QuadRect;
 pub use quadtree::{QuadTree, QuadTreeElement};

@@ -1,12 +1,13 @@
 use crate::quadtree::centered_aabb::CenteredAABB;
 use crate::quadtree::quad_rect::QuadRect;
+use crate::quadtree::AABB;
 
 pub type NodeIndexType = u32;
 
 #[derive(Debug)]
 pub struct NodeData {
     /// The index of the `Node` described by this `NodeData` instance.
-    pub index: NodeIndexType,
+    pub(crate) index: NodeIndexType,
     /// The centered AABB of the the node: center x, center y, width and height.
     pub crect: CenteredAABB,
     /// The depth of the node.
@@ -51,5 +52,11 @@ impl NodeData {
         let can_split_width = self.crect.width >= (smallest_size * 2);
         let can_split_height = self.crect.height >= (smallest_size * 2);
         can_split_width || can_split_height
+    }
+}
+
+impl Into<AABB> for NodeData {
+    fn into(self) -> AABB {
+        self.crect.into()
     }
 }
