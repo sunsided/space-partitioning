@@ -582,6 +582,7 @@ where
     ///
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
+    #[inline]
     pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
         let root = self.get_root_node_data();
         let leaves = self.find_leaves_aabb(root, rect);
@@ -593,6 +594,7 @@ where
     ///
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
+    #[inline]
     pub fn intersect_generic<T>(&self, element: &T) -> HashSet<ElementId>
     where
         T: IntersectsWith<AABB>,
