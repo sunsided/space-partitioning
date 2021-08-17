@@ -59,7 +59,6 @@ fn main() {
 
         if let Some(pos) = e.mouse_cursor_args() {
             mouse_pos = pos;
-            items_under_mouse = intersect_with_mouse(&mut tree, &mut window_size, pos, CURSOR_SIZE);
         }
 
         if let Some(args) = e.resize_args() {
@@ -68,6 +67,19 @@ fn main() {
 
         if let Some(args) = e.update_args() {
             rotation += 3.0 * args.dt;
+
+            // Update the element.
+            assert!(tree.remove(&QuadTreeElement::new(0, items[0].get_aabb())));
+            items[0].cx = -rotation.cos() * 128.0;
+            items[0].cy = rotation.sin() * 128.0;
+            tree.insert(QuadTreeElement::new(0, items[0].get_aabb()));
+
+            // Compact the tree.
+            tree.cleanup();
+
+            // Get new intersections.
+            items_under_mouse =
+                intersect_with_mouse(&mut tree, &mut window_size, mouse_pos, CURSOR_SIZE);
         }
 
         if let Some(args) = e.render_args() {
@@ -212,11 +224,32 @@ fn node_color(node: &NodeInfo) -> [f32; 4] {
     }
 }
 
+impl Disk {
+    fn get_aabb(&self) -> AABB {
+        AABB::new(
+            (self.cx - self.radius).floor() as _,
+            (self.cy - self.radius).floor() as _,
+            (self.cx + self.radius).ceil() as _,
+            (self.cy + self.radius).ceil() as _,
+        )
+    }
+}
+
 fn build_test_data() -> (QuadTree, Vec<Disk>) {
-    let mut tree = QuadTree::new(QuadRect::new(-256, -256, 512, 512), 8);
+    let mut tree = QuadTree::new(QuadRect::new(-256, -256, 512, 512), 4);
     let mut items = Vec::new();
 
-    for i in 0..32 {
+    let item = Disk {
+        id: 0,
+        cx: -128.0,
+        cy: 0.0,
+        radius: 32.0,
+    };
+    tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
+    debug_assert_eq!(items.len(), item.id as usize);
+    items.push(item);
+
+    for i in 1..=32 {
         let mut rng = rand::thread_rng();
         let item = Disk {
             id: i as _,
@@ -225,15 +258,7 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
             radius: rng.gen_range(2.0..16.0),
         };
 
-        let item_aabb = AABB::new(
-            (item.cx - item.radius).ceil() as _,
-            (item.cy - item.radius).ceil() as _,
-            (item.cx + item.radius).ceil() as _,
-            (item.cy + item.radius).ceil() as _,
-        );
-
-        tree.insert(QuadTreeElement::new(item.id, item_aabb));
-
+        tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
         debug_assert_eq!(items.len(), item.id as usize);
         items.push(item);
     }
