@@ -1,5 +1,6 @@
 mod aabb;
 mod centered_aabb;
+mod error;
 mod free_list;
 mod node;
 mod node_data;

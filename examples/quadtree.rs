@@ -5,6 +5,8 @@ use space_partitioning::QuadTree;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 
+const TREE_DEPTH: u32 = 6;
+
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const WHITE: [f32; 4] = [1.0; 4];
 const DISK: [f32; 4] = [0.0, 1.0, 0.0, 0.5];
@@ -15,11 +17,18 @@ const QUAD_CELL_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 0.75];
 const QUAD_CELL_FULL: [f32; 4] = [0.25, 0.25, 0.25, 0.25];
 const QUAD_CELL_EMPTY: [f32; 4] = [0.25, 0.25, 0.25, 0.125];
 
+const CURSOR_SIZE: f64 = 64.0;
+
 struct Disk {
     pub id: u32,
     pub cx: f64,
     pub cy: f64,
     pub radius: f64,
+}
+
+#[derive(Debug, Default)]
+struct Mouse {
+    pub pos: [f64; 2],
 }
 
 fn main() {
@@ -31,13 +40,13 @@ fn main() {
         .build()
         .unwrap();
 
-    let (mut tree, mut items) = build_test_data();
-
     let mut rotation = 0.0;
-    let mut mouse_pos = [0.0; 2];
     let mut window_size = [0.0; 2];
     let mut items_under_mouse = HashSet::default();
-    const CURSOR_SIZE: f64 = 64.0;
+    let mut mouse = Mouse::default();
+
+    let (mut tree, mut items) = build_test_data();
+    tree.insert(mouse.build_qte(&window_size));
 
     while let Some(e) = window.next() {
         if let Some(args) = e.button_args() {
@@ -49,6 +58,7 @@ fn main() {
 
                         // Generate new data points
                         let (new_tree, new_items) = build_test_data();
+                        tree.insert(mouse.build_qte(&window_size));
                         tree = new_tree;
                         items = new_items;
                     }
@@ -58,28 +68,35 @@ fn main() {
         }
 
         if let Some(pos) = e.mouse_cursor_args() {
-            mouse_pos = pos;
+            // Need to remove the mouse from the tree before we change its AABB.
+            tree.remove(&mouse.build_qte(&window_size));
+            mouse.pos = pos;
+            tree.insert(mouse.build_qte(&window_size));
         }
 
         if let Some(args) = e.resize_args() {
+            // Need to remove the mouse from the tree before we change its AABB.
+            tree.remove(&mouse.build_qte(&window_size));
             window_size = args.window_size;
+            tree.insert(mouse.build_qte(&window_size));
         }
 
         if let Some(args) = e.update_args() {
             rotation += 3.0 * args.dt;
 
-            // Update the element.
+            // Update the moving element.
             assert!(tree.remove(&QuadTreeElement::new(0, items[0].get_aabb())));
             items[0].cx = -rotation.cos() * 128.0;
             items[0].cy = rotation.sin() * 128.0;
-            tree.insert(QuadTreeElement::new(0, items[0].get_aabb()));
+            tree.insert(QuadTreeElement::new(0, items[0].get_aabb()))
+                .expect("element was out of bounds");
 
             // Compact the tree.
             tree.cleanup();
 
             // Get new intersections.
             items_under_mouse =
-                intersect_with_mouse(&mut tree, &mut window_size, mouse_pos, CURSOR_SIZE);
+                intersect_with_mouse(&mut tree, &mut window_size, mouse.pos, CURSOR_SIZE);
         }
 
         if let Some(args) = e.render_args() {
@@ -98,69 +115,16 @@ fn main() {
 
                 // Render the mouse cursor.
                 let rect = [
-                    mouse_pos[0] - CURSOR_SIZE * 0.5,
-                    mouse_pos[1] - CURSOR_SIZE * 0.5,
+                    mouse.pos[0] - CURSOR_SIZE * 0.5,
+                    mouse.pos[1] - CURSOR_SIZE * 0.5,
                     CURSOR_SIZE,
                     CURSOR_SIZE,
                 ];
                 rectangle(MOUSE, rect, c.transform, g);
                 Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
-
-                /*
-                for i in 0..5 {
-                    let c = c.trans(0.0, i as f64 * 100.0);
-
-                    let black = [0.0, 0.0, 0.0, 1.0];
-                    let red = [1.0, 0.0, 0.0, 1.0];
-                    let rect = math::margin_rectangle([20.0, 20.0, 60.0, 60.0], i as f64 * 5.0);
-                    rectangle(red, rect, c.transform, g);
-                    Rectangle::new_border(black, 2.0).draw(rect, &c.draw_state, c.transform, g);
-
-                    let green = [0.0, 1.0, 0.0, 1.0];
-                    let h = 60.0 * (1.0 - i as f64 / 5.0);
-                    let rect = [120.0, 50.0 - h / 2.0, 60.0, h];
-                    ellipse(green, rect, c.transform, g);
-                    Ellipse::new_border(black, 2.0).draw(rect, &c.draw_state, c.transform, g);
-
-                    let blue = [0.0, 0.0, 1.0, 1.0];
-                    circle_arc(
-                        blue,
-                        10.0,
-                        0.0,
-                        f64::_360() - i as f64 * 1.2 - rotation,
-                        [230.0, 30.0, 40.0, 40.0],
-                        c.transform,
-                        g,
-                    );
-
-                    let orange = [1.0, 0.5, 0.0, 1.0];
-                    line(
-                        orange,
-                        5.0,
-                        [320.0 + i as f64 * 15.0, 20.0, 380.0 - i as f64 * 15.0, 80.0],
-                        c.transform,
-                        g,
-                    );
-
-                    let magenta = [1.0, 0.0, 0.5, 1.0];
-                    polygon(
-                        magenta,
-                        &[
-                            [420.0, 20.0],
-                            [480.0, 20.0],
-                            [480.0 - i as f64 * 15.0, 80.0],
-                        ],
-                        c.transform,
-                        g,
-                    );
-                }
-                */
             });
         }
     }
-
-    // TODO: let candidates = tree.intersect_aabb(&AABB::new(128, 128, 256, 256));
-    // TODO: assert!(candidates.len() > 0);
 }
 
 fn intersect_with_mouse(
@@ -224,6 +188,38 @@ fn node_color(node: &NodeInfo) -> [f32; 4] {
     }
 }
 
+fn build_test_data() -> (QuadTree, Vec<Disk>) {
+    let mut tree = QuadTree::new(QuadRect::new(-256, -256, 512, 512), TREE_DEPTH);
+    let mut items = Vec::new();
+
+    // Build a moving element.
+    let item = Disk {
+        id: 0,
+        cx: -128.0,
+        cy: 0.0,
+        radius: 32.0,
+    };
+    tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
+    debug_assert_eq!(items.len(), item.id as usize);
+    items.push(item);
+
+    // Build some static elements.
+    for i in 0..32 {
+        let mut rng = rand::thread_rng();
+        let item = Disk {
+            id: (i + 1) as _,
+            cx: rng.gen_range(-256.0..256.0),
+            cy: rng.gen_range(-256.0..256.0),
+            radius: rng.gen_range(2.0..16.0),
+        };
+
+        tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
+        debug_assert_eq!(items.len(), item.id as usize);
+        items.push(item);
+    }
+    (tree, items)
+}
+
 impl Disk {
     fn get_aabb(&self) -> AABB {
         AABB::new(
@@ -235,32 +231,16 @@ impl Disk {
     }
 }
 
-fn build_test_data() -> (QuadTree, Vec<Disk>) {
-    let mut tree = QuadTree::new(QuadRect::new(-256, -256, 512, 512), 4);
-    let mut items = Vec::new();
-
-    let item = Disk {
-        id: 0,
-        cx: -128.0,
-        cy: 0.0,
-        radius: 32.0,
-    };
-    tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
-    debug_assert_eq!(items.len(), item.id as usize);
-    items.push(item);
-
-    for i in 1..=32 {
-        let mut rng = rand::thread_rng();
-        let item = Disk {
-            id: i as _,
-            cx: rng.gen_range(-256.0..256.0),
-            cy: rng.gen_range(-256.0..256.0),
-            radius: rng.gen_range(2.0..16.0),
-        };
-
-        tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
-        debug_assert_eq!(items.len(), item.id as usize);
-        items.push(item);
+impl Mouse {
+    fn build_qte(&self, window_size: &[f64; 2]) -> QuadTreeElement {
+        QuadTreeElement::new(
+            1337,
+            AABB::new(
+                (self.pos[0] - window_size[0] * 0.5 - CURSOR_SIZE * 0.5).floor() as _,
+                (self.pos[1] - window_size[0] * 0.5 - CURSOR_SIZE * 0.5).floor() as _,
+                (self.pos[0] - window_size[0] * 0.5 + CURSOR_SIZE * 0.5).ceil() as _,
+                (self.pos[1] - window_size[0] * 0.5 + CURSOR_SIZE * 0.5).ceil() as _,
+            ),
+        )
     }
-    (tree, items)
 }
