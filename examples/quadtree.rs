@@ -1,19 +1,22 @@
 use piston_window::*;
 use rand::Rng;
+use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{NodeInfo, QuadRect, QuadTreeElement, AABB};
 use space_partitioning::QuadTree;
-use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 
 const TREE_DEPTH: u32 = 6;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-const WHITE: [f32; 4] = [1.0; 4];
-const DISK: [f32; 4] = [0.0, 1.0, 0.0, 0.5];
-const DISK_WITH_HIT: [f32; 4] = [1.0, 1.0, 0.0, 0.5];
-const MOUSE: [f32; 4] = [0.8, 0.8, 1.0, 0.25];
 
-const QUAD_CELL_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 0.75];
+const DISK: [f32; 4] = [0.0, 1.0, 0.0, 0.5];
+const DISK_WITH_MOUSE_HIT: [f32; 4] = [1.0, 1.0, 0.0, 0.5];
+const DISK_WITH_RAY_HIT: [f32; 4] = [0.2, 0.0, 1.0, 0.5];
+const DISK_WITH_MANY_HITS: [f32; 4] = [1.0, 0.0, 0.0, 0.5];
+const MOUSE: [f32; 4] = [0.8, 0.8, 1.0, 0.25];
+const RAY: [f32; 4] = [1.0, 0.5, 0.0, 1.0];
+
+const QUAD_CELL_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const QUAD_CELL_FULL: [f32; 4] = [0.25, 0.25, 0.25, 0.25];
 const QUAD_CELL_EMPTY: [f32; 4] = [0.25, 0.25, 0.25, 0.125];
 
@@ -43,10 +46,13 @@ fn main() {
     let mut rotation = 0.0;
     let mut window_size = [0.0; 2];
     let mut items_under_mouse = HashSet::default();
+    let mut items_under_ray = HashSet::default();
     let mut mouse = Mouse::default();
 
+    let mut ray = Ray::new(0., -320., 0., -1.);
+
     let (mut tree, mut items) = build_test_data();
-    tree.insert(mouse.build_qte(&window_size));
+    let _ = tree.insert(mouse.build_qte(&window_size));
 
     while let Some(e) = window.next() {
         if let Some(args) = e.button_args() {
@@ -55,10 +61,11 @@ fn main() {
                     Button::Keyboard(Key::R) => {
                         // Clear intersections.
                         items_under_mouse.clear();
+                        items_under_ray.clear();
 
                         // Generate new data points
                         let (new_tree, new_items) = build_test_data();
-                        tree.insert(mouse.build_qte(&window_size));
+                        let _ = tree.insert(mouse.build_qte(&window_size));
                         tree = new_tree;
                         items = new_items;
                     }
@@ -71,18 +78,22 @@ fn main() {
             // Need to remove the mouse from the tree before we change its AABB.
             tree.remove(&mouse.build_qte(&window_size));
             mouse.pos = pos;
-            tree.insert(mouse.build_qte(&window_size));
+            let _ = tree.insert(mouse.build_qte(&window_size));
         }
 
         if let Some(args) = e.resize_args() {
             // Need to remove the mouse from the tree before we change its AABB.
             tree.remove(&mouse.build_qte(&window_size));
             window_size = args.window_size;
-            tree.insert(mouse.build_qte(&window_size));
+            let _ = tree.insert(mouse.build_qte(&window_size));
         }
 
         if let Some(args) = e.update_args() {
             rotation += 3.0 * args.dt;
+
+            // Update the ray.
+            let angle = ((rotation * 0.2).cos() * 90.).deg_to_rad();
+            ray = Ray::new(ray.x, ray.y, angle.sin() as _, angle.cos() as _);
 
             // Update the moving element.
             assert!(tree.remove(&QuadTreeElement::new(0, items[0].get_aabb())));
@@ -97,6 +108,7 @@ fn main() {
             // Get new intersections.
             items_under_mouse =
                 intersect_with_mouse(&mut tree, &mut window_size, mouse.pos, CURSOR_SIZE);
+            items_under_ray = intersect_with_ray(&mut tree, &ray);
         }
 
         if let Some(args) = e.render_args() {
@@ -105,12 +117,11 @@ fn main() {
 
                 {
                     // Move to window center.
-                    let mut half_window_size =
-                        [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
+                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
                     let c = c.trans(half_window_size[0], half_window_size[1]);
 
                     render_tree_nodes(&tree, g, &c);
-                    render_disks(&items, g, &c, &items_under_mouse);
+                    render_disks(&items, g, &c, &items_under_mouse, &items_under_ray);
                 }
 
                 // Render the mouse cursor.
@@ -122,13 +133,22 @@ fn main() {
                 ];
                 rectangle(MOUSE, rect, c.transform, g);
                 Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+
+                {
+                    // Move to window center.
+                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
+                    let c = c.trans(half_window_size[0], half_window_size[1]);
+
+                    // Draw the ray
+                    render_ray(&ray, g, c);
+                }
             });
         }
     }
 }
 
 fn intersect_with_mouse(
-    tree: &mut QuadTree,
+    tree: &QuadTree,
     window_size: &mut [f64; 2],
     pos: [f64; 2],
     cursor_size: f64,
@@ -146,7 +166,17 @@ fn intersect_with_mouse(
     tree.intersect_aabb(&aabb)
 }
 
-fn render_disks(items: &Vec<Disk>, g: &mut G2d, c: &Context, matches: &HashSet<u32>) {
+fn intersect_with_ray(tree: &QuadTree, ray: &Ray) -> HashSet<u32> {
+    tree.intersect_generic(ray)
+}
+
+fn render_disks(
+    items: &Vec<Disk>,
+    g: &mut G2d,
+    c: &Context,
+    mouse_matches: &HashSet<u32>,
+    ray_matches: &HashSet<u32>,
+) {
     for disk in items.iter() {
         let rect = [
             disk.cx - disk.radius,
@@ -155,8 +185,15 @@ fn render_disks(items: &Vec<Disk>, g: &mut G2d, c: &Context, matches: &HashSet<u
             2. * disk.radius,
         ];
 
-        let color = if matches.contains(&disk.id) {
-            DISK_WITH_HIT
+        let mouse_hit = mouse_matches.contains(&disk.id);
+        let ray_hit = ray_matches.contains(&disk.id);
+
+        let color = if mouse_hit & ray_hit {
+            DISK_WITH_MANY_HITS
+        } else if mouse_hit {
+            DISK_WITH_MOUSE_HIT
+        } else if ray_hit {
+            DISK_WITH_RAY_HIT
         } else {
             DISK
         };
@@ -176,8 +213,23 @@ fn render_tree_nodes(tree: &QuadTree, g: &mut G2d, c: &Context) {
             (aabb.br.y - aabb.tl.y) as f64,
         ];
         rectangle(node_color(&node), rect, c.transform, g);
-        Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+        Rectangle::new_border(QUAD_CELL_BORDER, 1.0).draw(rect, &c.draw_state, c.transform, g);
     });
+}
+
+fn render_ray(ray: &Ray, g: &mut G2d, c: Context) {
+    line(
+        RAY,
+        1.0,
+        [
+            ray.x as f64,
+            ray.y as _,
+            (ray.x + ray.dx * 1024.0) as _,
+            (ray.y + ray.dy * 1024.0) as _,
+        ],
+        c.transform,
+        g,
+    );
 }
 
 fn node_color(node: &NodeInfo) -> [f32; 4] {
@@ -199,7 +251,8 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
         cy: 0.0,
         radius: 32.0,
     };
-    tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
+    tree.insert(QuadTreeElement::new(item.id, item.get_aabb()))
+        .expect("insert failed");
     debug_assert_eq!(items.len(), item.id as usize);
     items.push(item);
 
@@ -213,7 +266,8 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
             radius: rng.gen_range(2.0..16.0),
         };
 
-        tree.insert(QuadTreeElement::new(item.id, item.get_aabb()));
+        tree.insert(QuadTreeElement::new(item.id, item.get_aabb()))
+            .expect("insert failed");
         debug_assert_eq!(items.len(), item.id as usize);
         items.push(item);
     }
@@ -242,5 +296,50 @@ impl Mouse {
                 (self.pos[1] - window_size[0] * 0.5 + CURSOR_SIZE * 0.5).ceil() as _,
             ),
         )
+    }
+}
+
+#[derive(Debug)]
+struct Ray {
+    x: f32,
+    y: f32,
+    dx: f32,
+    dy: f32,
+    inv_dx: f32,
+    inv_dy: f32,
+}
+
+impl Ray {
+    fn new(x: f32, y: f32, dx: f32, dy: f32) -> Ray {
+        Ray {
+            x,
+            y,
+            dx,
+            dy,
+            inv_dx: 1.0 / dx,
+            inv_dy: 1.0 / dy,
+        }
+    }
+}
+
+impl IntersectsWith<AABB> for Ray {
+    fn intersects_with(&self, other: &AABB) -> bool {
+        // https://gamedev.stackexchange.com/a/18459/10433
+
+        let t1 = (other.tl.x as f32 - self.x) * self.inv_dx;
+        let t2 = (other.br.x as f32 - self.x) * self.inv_dx;
+        let t3 = (other.br.y as f32 - self.y) * self.inv_dy;
+        let t4 = (other.tl.y as f32 - self.y) * self.inv_dy;
+
+        let tmin = t1.min(t2).max(t3.min(t4));
+        let tmax = t1.max(t2).min(t3.max(t4));
+
+        // if tmax < 0, ray (line) is intersecting AABB, but the whole AABB is behind us
+        // if tmin > tmax, ray doesn't intersect AABB
+        if (tmax < 0.) | (tmin > tmax) {
+            return false;
+        }
+
+        return true;
     }
 }

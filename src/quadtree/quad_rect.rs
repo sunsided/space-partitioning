@@ -1,4 +1,3 @@
-use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
 use crate::quadtree::centered_aabb::CenteredAABB;
 
