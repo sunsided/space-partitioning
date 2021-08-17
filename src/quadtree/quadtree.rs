@@ -552,6 +552,7 @@ where
     /// Counts the total number of references. This number should be at least
     /// the number of elements inserted; it will be higher if elements
     /// span multiple cells.
+    #[allow(dead_code)]
     pub(crate) fn count_element_references(&self) -> usize {
         let mut to_process: SmallVec<[usize; 128]> = smallvec::smallvec![0];
         let mut count = 0usize;
@@ -632,6 +633,7 @@ where
     }
 
     /// Collects all element IDs stored in the tree by visiting all cells.
+    #[allow(dead_code)]
     pub(crate) fn collect_ids(&self) -> HashSet<ElementId> {
         let aabb: AABB = self.root_rect.into();
         self.intersect_aabb(&aabb)
