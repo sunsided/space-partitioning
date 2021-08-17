@@ -27,3 +27,5 @@ opt-level = 1
 
 [dev-dependencies]
 rand = "0.8.3"
+piston = "0.53.0"
+piston_window = "0.120.0"

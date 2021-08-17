@@ -1,12 +1,13 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
-use crate::quadtree::centered_aabb::Quadrants;
 use crate::quadtree::free_list;
 use crate::quadtree::free_list::{FreeList, IndexType};
 use crate::quadtree::node::{Node, NodeElementCountType};
 use crate::quadtree::node_data::{NodeData, NodeIndexType};
+use crate::quadtree::node_info::NodeInfo;
 use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
+use crate::quadtree::quadrants::Quadrants;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 
@@ -398,6 +399,27 @@ where
         }
 
         leaves
+    }
+
+    pub fn visit_leaves<F>(&self, mut visit: F)
+    where
+        F: FnMut(NodeInfo),
+    {
+        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        to_process.push_back(self.get_root_node_data());
+
+        while to_process.len() > 0 {
+            let nd = to_process.pop_back();
+
+            let node = &self.nodes[nd.index as usize];
+            if node.is_leaf() {
+                visit(NodeInfo::from(nd, node.element_count));
+                continue;
+            }
+
+            let fc = self.nodes[nd.index as usize].get_first_child_node_index();
+            Self::collect_relevant_quadrants(&mut to_process, nd, fc, Quadrants::all())
+        }
     }
 
     fn collect_relevant_quadrants(
