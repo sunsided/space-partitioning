@@ -176,7 +176,7 @@ where
         unimplemented!()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, unused_variables)]
     fn debug_is_in_free_list(&self, n: IndexType) -> bool {
         #[cfg(any(debug_assertions, test))]
         {
