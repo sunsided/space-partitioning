@@ -140,8 +140,9 @@ where
     /// If the element at the specified index was erased, the union now acts
     ///  as a pointer to the next free element. Accessing the same index again after that.
     ///  is undefined behavior.
+    #[inline]
     pub unsafe fn at(&self, index: IndexType) -> &T {
-        assert_ne!(index, SENTINEL);
+        debug_assert_ne!(index, SENTINEL);
         debug_assert!(!self.debug_is_in_free_list(index));
         &self.data[index as usize].element
     }
@@ -153,8 +154,9 @@ where
     /// If the element at the specified index was erased, the union now acts
     /// as a pointer to the next free element. Accessing the same index again after that.
     /// is undefined behavior.
+    #[inline]
     pub unsafe fn at_mut(&mut self, index: IndexType) -> &mut T {
-        assert_ne!(index, SENTINEL);
+        debug_assert_ne!(index, SENTINEL);
         debug_assert!(!self.debug_is_in_free_list(index));
         &mut self.data[index as usize].element
     }
