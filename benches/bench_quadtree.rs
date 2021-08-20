@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use rand::prelude::ThreadRng;
 use rand::{thread_rng, Rng};
 use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
