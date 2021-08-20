@@ -10,13 +10,14 @@ pub struct FreeList<T>
 where
     T: Default,
 {
+    /// The number of live elements in the list.
+    #[cfg(debug_assertions)]
+    length: usize,
+    /// The actual data.
     data: Vec<FreeElement<T>>,
     /// The index of the the most recently freed element, or `SENTINEL` if no
     /// element is free.
     first_free: IndexType,
-    /// The number of live elements in the list.
-    #[cfg(debug_assertions)]
-    length: usize,
 }
 
 union FreeElement<T> {

@@ -12,10 +12,10 @@ pub struct QuadTreeElement<ElementId = u32>
 where
     ElementId: ElementIdType,
 {
-    /// Stores the ID for the element (can be used to refer to external data).
-    pub id: ElementId,
     /// The axis-aligned bounding box of the element.
     pub rect: AABB,
+    /// Stores the ID for the element (can be used to refer to external data).
+    pub id: ElementId,
 }
 
 impl<ElementId> QuadTreeElement<ElementId>

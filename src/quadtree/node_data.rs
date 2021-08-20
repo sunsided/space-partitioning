@@ -8,10 +8,10 @@ pub type NodeIndexType = u32;
 pub struct NodeData {
     /// The index of the `Node` described by this `NodeData` instance.
     pub(crate) index: NodeIndexType,
-    /// The centered AABB of the the node: center x, center y, width and height.
-    pub crect: CenteredAABB,
     /// The depth of the node.
     pub depth: u32,
+    /// The centered AABB of the the node: center x, center y, width and height.
+    pub crect: CenteredAABB,
 }
 
 impl NodeData {
@@ -39,6 +39,7 @@ impl NodeData {
     /// This is mostly relevant with integral sizes.
     ///
     /// Additionally, ensures that the node has not reached its maximum depth.
+    #[inline]
     pub fn can_split_further(&self, smallest_size: u32, max_depth: u32) -> bool {
         let split_allowed = self.can_subdivide(smallest_size);
         let can_go_deeper = self.depth < max_depth;
@@ -48,6 +49,7 @@ impl NodeData {
     /// Determines if a node is at least `smallest_size` in width or height,
     /// guaranteeing that after subdivision, each cell would be of a usable size.
     /// This is mostly relevant with integral sizes.
+    #[inline]
     fn can_subdivide(&self, smallest_size: u32) -> bool {
         let can_split_width = self.crect.width >= (smallest_size * 2) as _;
         let can_split_height = self.crect.height >= (smallest_size * 2) as _;

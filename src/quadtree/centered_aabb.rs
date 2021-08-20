@@ -19,6 +19,7 @@ pub struct CenteredAABB {
 impl Index<usize> for CenteredAABB {
     type Output = i32;
 
+    #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < 4);
         let ptr = self as *const _ as *const [i32; 4];
@@ -89,6 +90,7 @@ impl CenteredAABB {
         }
     }
 
+    #[inline]
     pub fn get_aabb(&self) -> AABB {
         let hx = self.width >> 1;
         let hy = self.height >> 1;
@@ -102,6 +104,7 @@ impl CenteredAABB {
 }
 
 impl Into<AABB> for CenteredAABB {
+    #[inline]
     fn into(self) -> AABB {
         self.get_aabb()
     }

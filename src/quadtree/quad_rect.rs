@@ -23,13 +23,14 @@ impl QuadRect {
         }
     }
 
+    #[inline]
     pub fn contains(&self, rect: &AABB) -> bool {
         let mx = (rect.tl.x + rect.br.x) >> 1;
         let my = (rect.tl.y + rect.br.y) >> 1;
 
         let r = self.l + self.hx;
         let b = self.t + self.hy;
-        mx >= self.l && mx <= r && my >= self.t && my <= b
+        (mx >= self.l) & (mx <= r) & (my >= self.t) & (my <= b)
     }
 }
 
@@ -45,18 +46,21 @@ impl Default for QuadRect {
 }
 
 impl Into<AABB> for QuadRect {
+    #[inline]
     fn into(self) -> AABB {
         AABB::new(self.l, self.t, self.l + self.hx, self.t + self.hy)
     }
 }
 
 impl Into<CenteredAABB> for QuadRect {
+    #[inline]
     fn into(self) -> CenteredAABB {
         CenteredAABB::from_ltwh(self.l, self.t, self.hx, self.hy)
     }
 }
 
 impl Into<CenteredAABB> for &QuadRect {
+    #[inline]
     fn into(self) -> CenteredAABB {
         CenteredAABB::from_ltwh(self.l, self.t, self.hx, self.hy)
     }
