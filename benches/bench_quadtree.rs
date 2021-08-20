@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rand::rngs::ThreadRng;
+use rand::prelude::ThreadRng;
 use rand::{thread_rng, Rng};
 use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
 use space_partitioning::QuadTree;
@@ -45,6 +45,18 @@ fn criterion_benchmark(c: &mut Criterion) {
         |b| {
             let mut rng = thread_rng();
             let tree = build_random_tree(&mut rng, 1024, 256, 256, 4);
+            b.iter(|| {
+                let aabb = random_aabb(&mut rng, 1..256, 1..256, 1..64, 1..64);
+                tree.intersect_generic(&aabb)
+            })
+        },
+    );
+
+    c.bench_function(
+        "intersect_generic tree(n=1024, w=256, h=256, depth=8)",
+        |b| {
+            let mut rng = thread_rng();
+            let tree = build_random_tree(&mut rng, 1024, 256, 256, 8);
             b.iter(|| {
                 let aabb = random_aabb(&mut rng, 1..256, 1..256, 1..64, 1..64);
                 tree.intersect_generic(&aabb)
