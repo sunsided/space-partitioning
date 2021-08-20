@@ -5,10 +5,15 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+- For the `QuadTree`, the maximum number of elements per node is now a parameter of the tree
+  rather than a constant.
+
 ### Internal
 
 - The `QuadTree` now stores ID and AABB information for the nodes in two separate lists.
-- The `QuadTree` now stores up to eight elements per node before it splits.
+- The `QuadTree` now stores up to sixteen elements per node before it splits.
 
 ## 0.2.0 - 2021-08-18
 

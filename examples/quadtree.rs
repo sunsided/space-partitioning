@@ -6,6 +6,7 @@ use space_partitioning::QuadTree;
 use std::collections::HashSet;
 
 const TREE_DEPTH: u32 = 6;
+const MAX_NUM_ELEMENTS: u32 = 4;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -241,7 +242,11 @@ fn node_color(node: &NodeInfo) -> [f32; 4] {
 }
 
 fn build_test_data() -> (QuadTree, Vec<Disk>) {
-    let mut tree = QuadTree::new(QuadRect::new(-256, -256, 512, 512), TREE_DEPTH);
+    let mut tree = QuadTree::new(
+        QuadRect::new(-256, -256, 512, 512),
+        TREE_DEPTH,
+        MAX_NUM_ELEMENTS,
+    );
     let mut items = Vec::new();
 
     // Build a moving element.
@@ -257,7 +262,7 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
     items.push(item);
 
     // Build some static elements.
-    for i in 0..32 {
+    for i in 0..64 {
         let mut rng = rand::thread_rng();
         let item = Disk {
             id: (i + 1) as _,
