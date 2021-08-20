@@ -16,7 +16,7 @@ use std::collections::HashSet;
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
 
 /// Each node must have less than the maximum allowed number of elements.
-const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tree
+const MAX_NUM_ELEMENTS: NodeElementCountType = 16; // TODO: Make parameter of tree
 
 /// We use this value to determine whether a node can be split.
 const SMALLEST_CELL_SIZE: i32 = 1; // TODO: Make parameter of tree
@@ -44,10 +44,10 @@ pub struct QuadTree<ElementId = u32>
 where
     ElementId: ElementIdType,
 {
-    /// Stores all the elements in the quadtree.
+    /// Stores all the IDs fo the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
     element_ids: FreeList<ElementId>,
-    /// Stores all the elements in the quadtree.
+    /// Stores all the rectangles of the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
     element_rects: FreeList<AABB>,
     /// Stores all the element nodes in the quadtree.

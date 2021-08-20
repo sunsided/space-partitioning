@@ -47,7 +47,7 @@ mod test {
             ))
             .expect("insert should work");
         }
-        assert_eq!(tree.count_element_references(), 5);
+        assert_eq!(tree.count_element_references(), 2);
 
         let inserted_ids = tree.collect_ids();
         assert_eq!(inserted_ids.len(), 2);
