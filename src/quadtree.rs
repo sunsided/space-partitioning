@@ -10,6 +10,7 @@ mod point;
 mod quad_rect;
 mod quadrants;
 mod quadtree;
+mod quadtree_element;
 
 pub use aabb::AABB;
 pub use node_info::NodeInfo;

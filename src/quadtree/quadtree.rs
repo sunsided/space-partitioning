@@ -9,6 +9,7 @@ use crate::quadtree::node_info::NodeInfo;
 use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
 use crate::quadtree::quadrants::Quadrants;
+pub use crate::quadtree::quadtree_element::{ElementIdType, QuadTreeElement};
 use smallvec::SmallVec;
 use std::collections::HashSet;
 
@@ -19,25 +20,6 @@ const MAX_NUM_ELEMENTS: NodeElementCountType = 1; // TODO: Make parameter of tre
 
 /// We use this value to determine whether a node can be split.
 const SMALLEST_CELL_SIZE: i32 = 1; // TODO: Make parameter of tree
-
-/// Alias for all traits required for an element ID.
-pub trait ElementIdType: Default + std::cmp::Eq + std::hash::Hash + Copy {}
-
-/// Helper implementation to automatically derive the [`ElementIdType`] trait
-impl<T> ElementIdType for T where T: Default + std::cmp::Eq + std::hash::Hash + Copy {}
-
-/// Represents an element in the QuadTree.
-#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
-pub struct QuadTreeElement<ElementId = u32>
-where
-    ElementId: ElementIdType,
-{
-    // TODO: Split element into two structs: One containing the ID, another one containing the coordinates only. This allows aligning the elements much better. Benchmark!
-    /// Stores the ID for the element (can be used to refer to external data).
-    pub id: ElementId,
-    /// The axis-aligned bounding box of the element.
-    pub rect: AABB,
-}
 
 /// Represents an element node in the quadtree.
 ///
@@ -64,7 +46,10 @@ where
 {
     /// Stores all the elements in the quadtree.
     /// An element is only inserted once to the quadtree no matter how many cells it occupies.
-    elements: FreeList<QuadTreeElement<ElementId>>,
+    element_ids: FreeList<ElementId>,
+    /// Stores all the elements in the quadtree.
+    /// An element is only inserted once to the quadtree no matter how many cells it occupies.
+    element_rects: FreeList<AABB>,
     /// Stores all the element nodes in the quadtree.
     /// For each cell occupied by a `QuadTreeElement`, we store
     /// a `QuadTreeElementNode`.
@@ -83,15 +68,6 @@ where
     max_depth: u32,
 }
 
-impl<ElementId> QuadTreeElement<ElementId>
-where
-    ElementId: ElementIdType,
-{
-    pub fn new(id: ElementId, rect: AABB) -> Self {
-        Self { id, rect }
-    }
-}
-
 impl<ElementId> QuadTree<ElementId>
 where
     ElementId: ElementIdType,
@@ -102,7 +78,8 @@ where
 
     pub fn new(root_rect: QuadRect, max_depth: u32) -> Self {
         Self {
-            elements: FreeList::default(),
+            element_ids: FreeList::default(),
+            element_rects: FreeList::default(),
             element_nodes: FreeList::default(),
             nodes: vec![Node::default()],
             root_rect,
@@ -118,7 +95,9 @@ where
         }
 
         // Insert the actual element.
-        let element_idx = self.elements.insert(element);
+        let element_idx = self.element_ids.insert(element.id);
+        let element_rect_idx = self.element_rects.insert(element.rect);
+        debug_assert_eq!(element_idx, element_rect_idx);
 
         let mut to_process: SmallVec<[NodeData; 128]> =
             smallvec::smallvec![self.get_root_node_data()];
@@ -179,7 +158,7 @@ where
         // For each element in the list ...
         while element_node_index != free_list::SENTINEL {
             let element_node = unsafe { *self.element_nodes.at(element_node_index) };
-            let element = unsafe { *self.elements.at(element_node.element_idx) };
+            let element = unsafe { *self.element_rects.at(element_node.element_idx) };
 
             self.assign_element_to_child_nodes(
                 mx,
@@ -229,12 +208,12 @@ where
         my: i32,
         first_child_index: free_list::IndexType,
         element_index: free_list::IndexType,
-        element: &QuadTreeElement<ElementId>,
+        element_rect: &AABB,
     ) {
-        let insert_top = element.rect.tl.y <= my;
-        let insert_bottom = element.rect.br.y > my;
-        let insert_left = element.rect.tl.x <= mx;
-        let insert_right = element.rect.br.x > mx;
+        let insert_top = element_rect.tl.y <= my;
+        let insert_bottom = element_rect.br.y > my;
+        let insert_left = element_rect.tl.x <= mx;
+        let insert_right = element_rect.br.x > mx;
 
         if insert_top & insert_left {
             self.insert_element_in_child_node(first_child_index + 0, element_index);
@@ -297,9 +276,9 @@ where
 
             while element_node_idx != free_list::SENTINEL {
                 let elem_node = *unsafe { self.element_nodes.at(element_node_idx) };
-                let elem = unsafe { self.elements.at(elem_node.element_idx) };
+                let elem_id = unsafe { self.element_ids.at(elem_node.element_idx) };
 
-                if elem.id == element.id {
+                if *elem_id == element.id {
                     debug_assert!(!element_found);
                     element_found = true;
 
@@ -352,7 +331,8 @@ where
         }
 
         if found_element_idx != free_list::SENTINEL {
-            self.elements.erase(found_element_idx);
+            self.element_ids.erase(found_element_idx);
+            self.element_rects.erase(found_element_idx);
             true
         } else {
             false
@@ -568,7 +548,8 @@ where
             }
         }
 
-        debug_assert!(count >= self.elements.debug_len());
+        debug_assert!(count >= self.element_ids.debug_len());
+        debug_assert!(count >= self.element_rects.debug_len());
         count
     }
 
@@ -619,12 +600,13 @@ where
             let mut elem_node_idx = leaf.first_child_or_element;
             while elem_node_idx != free_list::SENTINEL {
                 let elem_node = unsafe { self.element_nodes.at(elem_node_idx) };
-                let elem = unsafe { self.elements.at(elem_node.element_idx) };
+                let elem_rect = unsafe { self.element_rects.at(elem_node.element_idx) };
+                let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
 
                 // Depending on the size of the quadrant, the candidate element
                 // might still not be covered by the search rectangle.
-                if rect.intersects_with(&elem.rect) {
-                    let _was_known = node_set.insert(elem.id);
+                if rect.intersects_with(&elem_rect) {
+                    let _was_known = node_set.insert(elem_id);
                 }
 
                 elem_node_idx = elem_node.next;
