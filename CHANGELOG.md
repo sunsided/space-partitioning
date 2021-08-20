@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Internal
+
+- The `QuadTree` now stores ID and AABB information for the nodes in two separate lists.
+- The `QuadTree` now stores up to eight elements per node before it splits.
+
 ## 0.2.0 - 2021-08-18
 
 ### Added
