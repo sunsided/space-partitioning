@@ -15,9 +15,6 @@ use std::collections::HashSet;
 
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
 
-/// We use this value to determine whether a node can be split.
-const SMALLEST_CELL_SIZE: i32 = 1; // TODO: Make parameter of tree
-
 /// Represents an element node in the quadtree.
 ///
 /// # Remarks
@@ -65,6 +62,8 @@ where
     max_depth: u32,
     /// Stores the maximum number of elements allowed before a node splits.
     max_num_elements: u32,
+    /// We use this value to determine whether a node can be split.
+    smallest_cell_size: u32,
 }
 
 impl<ElementId> QuadTree<ElementId>
@@ -72,10 +71,17 @@ where
     ElementId: ElementIdType,
 {
     pub fn default() -> Self {
-        Self::new(QuadRect::default(), 8, 16)
+        Self::new(QuadRect::default(), 8, 16, 1)
     }
 
-    pub fn new(root_rect: QuadRect, max_depth: u32, max_num_elements: u32) -> Self {
+    pub fn new(
+        root_rect: QuadRect,
+        max_depth: u32,
+        max_num_elements: u32,
+        smallest_cell_size: u32,
+    ) -> Self {
+        assert!(max_num_elements > 0);
+        assert!(smallest_cell_size > 0);
         Self {
             element_ids: FreeList::default(),
             element_rects: FreeList::default(),
@@ -85,6 +91,7 @@ where
             free_node: free_list::SENTINEL,
             max_depth,
             max_num_elements,
+            smallest_cell_size,
         }
     }
 
@@ -93,6 +100,8 @@ where
         if !self.root_rect.contains(element_coords) {
             return Err(InsertError::OutOfBounds);
         }
+
+        let max_num_elements = self.max_num_elements;
 
         // Insert the actual element.
         let element_idx = self.element_ids.insert(element.id);
@@ -117,8 +126,8 @@ where
                     (node.element_count, node.first_child_or_element)
                 };
 
-                let can_split = leaf.can_split_further(SMALLEST_CELL_SIZE, self.max_depth);
-                let node_is_full = element_count >= self.max_num_elements;
+                let can_split = leaf.can_split_further(self.smallest_cell_size, self.max_depth);
+                let node_is_full = element_count >= max_num_elements;
 
                 let must_store_element = !node_is_full || !can_split;
                 if must_store_element {
@@ -627,7 +636,7 @@ where
 #[cfg(test)]
 pub(crate) fn build_test_tree() -> QuadTree {
     let quad_rect = QuadRect::new(-20, -20, 40, 40);
-    let mut tree = QuadTree::new(quad_rect, 1, 1);
+    let mut tree = QuadTree::new(quad_rect, 1, 1, 1);
     // top-left
     tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)))
         .expect("insert should work");
@@ -672,7 +681,7 @@ mod test {
     #[test]
     fn cleanup_works() {
         let quad_rect = QuadRect::new(-20, -20, 40, 40);
-        let mut tree = QuadTree::new(quad_rect, 1, 1);
+        let mut tree = QuadTree::new(quad_rect, 1, 1, 1);
         // top-left
         tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)))
             .expect("insert should work");

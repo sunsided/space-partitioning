@@ -6,7 +6,7 @@ use space_partitioning::QuadTree;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("insert tree(w=256, h=256, depth=4)", |b| {
-        let mut tree = QuadTree::new(QuadRect::new(0, 0, 256, 256), 4);
+        let mut tree = QuadTree::new(QuadRect::new(0, 0, 256, 256), 4, 16, 1);
         let mut rng = thread_rng();
         let mut id = 0;
 
@@ -19,7 +19,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
 
     c.bench_function("insert tree(w=256, h=256, depth=8)", |b| {
-        let mut tree = QuadTree::new(QuadRect::new(0, 0, 256, 256), 8);
+        let mut tree = QuadTree::new(QuadRect::new(0, 0, 256, 256), 8, 16, 1);
         let mut rng = thread_rng();
         let mut id = 0;
 
@@ -72,7 +72,7 @@ fn build_random_tree(
     height: i32,
     depth: u32,
 ) -> QuadTree {
-    let mut tree = QuadTree::new(QuadRect::new(0, 0, width, height), depth);
+    let mut tree = QuadTree::new(QuadRect::new(0, 0, width, height), depth, 16, 1);
     for id in 0..num_elements {
         let aabb = random_aabb(&mut rng, 1..256, 1..256, 1..32, 1..32);
         tree.insert(QuadTreeElement::new(id, aabb))

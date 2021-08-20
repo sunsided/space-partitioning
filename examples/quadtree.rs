@@ -6,7 +6,7 @@ use space_partitioning::QuadTree;
 use std::collections::HashSet;
 
 const TREE_DEPTH: u32 = 6;
-const MAX_NUM_ELEMENTS: u32 = 4;
+const MAX_NUM_ELEMENTS: u32 = 2;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -246,6 +246,7 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
         QuadRect::new(-256, -256, 512, 512),
         TREE_DEPTH,
         MAX_NUM_ELEMENTS,
+        1,
     );
     let mut items = Vec::new();
 

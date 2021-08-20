@@ -57,7 +57,7 @@ mod test {
 
     #[test]
     fn insert_a_lot_works() {
-        let mut tree = QuadTree::new(QuadRect::new(-16, -16, 32, 32), 8);
+        let mut tree = QuadTree::new(QuadRect::new(-16, -16, 32, 32), 8, 1, 1);
         let count = 1024i32;
         let mut x = -16;
         let mut y = -16;

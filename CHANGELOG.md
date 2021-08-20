@@ -7,8 +7,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- For the `QuadTree`, the maximum number of elements per node is now a parameter of the tree
-  rather than a constant.
+- For the `QuadTree`, the maximum number of elements per node and the smallest cell size
+  are now parameters of the tree rather than constants.
 
 ### Internal
 
