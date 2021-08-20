@@ -629,16 +629,22 @@ pub(crate) fn build_test_tree() -> QuadTree {
     let quad_rect = QuadRect::new(-20, -20, 40, 40);
     let mut tree = QuadTree::new(quad_rect, 1);
     // top-left
-    tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
-    tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+    tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)))
+        .expect("insert should work");
+    tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)))
+        .expect("insert should work");
     // top-right
-    tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+    tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)))
+        .expect("insert should work");
     // bottom-left
-    tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+    tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)))
+        .expect("insert should work");
     // bottom-right
-    tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+    tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)))
+        .expect("insert should work");
     // center
-    tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+    tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)))
+        .expect("insert should work");
 
     // The depth of 1 limits the tree to four quadrants.
     // Each of the first five elements creates a single reference
@@ -668,16 +674,22 @@ mod test {
         let quad_rect = QuadRect::new(-20, -20, 40, 40);
         let mut tree = QuadTree::new(quad_rect, 1);
         // top-left
-        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)));
-        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)));
+        tree.insert(QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5)))
+            .expect("insert should work");
+        tree.insert(QuadTreeElement::new(1001, AABB::new(-20, -20, -18, -18)))
+            .expect("insert should work");
         // top-right
-        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)));
+        tree.insert(QuadTreeElement::new(2000, AABB::new(5, -15, 15, -5)))
+            .expect("insert should work");
         // bottom-left
-        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)));
+        tree.insert(QuadTreeElement::new(3000, AABB::new(-15, 5, -5, 15)))
+            .expect("insert should work");
         // bottom-right
-        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)));
+        tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)))
+            .expect("insert should work");
         // center
-        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)));
+        tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)))
+            .expect("insert should work");
 
         // Similar to index test.
         assert_eq!(tree.collect_ids().len(), 6);

@@ -27,7 +27,8 @@ mod test {
     #[test]
     fn insert_once_works() {
         let mut tree = QuadTree::default();
-        tree.insert(QuadTreeElement::new(0, AABB::default()));
+        tree.insert(QuadTreeElement::new(0, AABB::default()))
+            .expect("insert should work");
         assert_eq!(tree.count_element_references(), 1);
 
         let inserted_ids = tree.collect_ids();
@@ -43,7 +44,8 @@ mod test {
             tree.insert(QuadTreeElement::new(
                 id,
                 AABB::new(-id, -id, id + 1, id + 1),
-            ));
+            ))
+            .expect("insert should work");
         }
         assert_eq!(tree.count_element_references(), 5);
 
@@ -60,7 +62,8 @@ mod test {
         let mut x = -16;
         let mut y = -16;
         for id in 0..count {
-            tree.insert(QuadTreeElement::new(id, AABB::new(x, y, x + 1, y + 1)));
+            tree.insert(QuadTreeElement::new(id, AABB::new(x, y, x + 1, y + 1)))
+                .expect("insert should work");
             x += 1;
             if x == 16 {
                 x = -16;
