@@ -601,11 +601,11 @@ where
             while elem_node_idx != free_list::SENTINEL {
                 let elem_node = unsafe { self.element_nodes.at(elem_node_idx) };
                 let elem_rect = unsafe { self.element_rects.at(elem_node.element_idx) };
-                let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
 
                 // Depending on the size of the quadrant, the candidate element
                 // might still not be covered by the search rectangle.
                 if rect.intersects_with(&elem_rect) {
+                    let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
                     let _was_known = node_set.insert(elem_id);
                 }
 
