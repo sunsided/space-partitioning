@@ -1,6 +1,7 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::quadrants::Quadrants;
 use crate::quadtree::AABB;
+use std::ops::RangeInclusive;
 
 /// A centered axis-aligned bounding box.
 #[derive(Debug, Default)]
@@ -42,24 +43,15 @@ impl CenteredAABB {
     }
 
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
+    #[inline]
     pub fn explore_quadrants_generic<T>(&self, other: &T) -> Quadrants
     where
         T: IntersectsWith<AABB>,
     {
-        let mx = self.center_x;
-        let my = self.center_y;
-        let hx = self.half_width;
-        let hy = self.half_height;
-
-        let l = mx - hx;
-        let r = mx + hx;
-        let t = my - hy;
-        let b = my + hy;
-
-        let top_left = AABB::from_ranges(l..=mx, t..=my);
-        let top_right = AABB::from_ranges(mx..=r, t..=my);
-        let bottom_left = AABB::from_ranges(l..=mx, my..=b);
-        let bottom_right = AABB::from_ranges(mx..=r, my..=b);
+        let top_left = AABB::from_ranges(self.left_half(), self.top_half());
+        let top_right = AABB::from_ranges(self.right_half(), self.top_half());
+        let bottom_left = AABB::from_ranges(self.left_half(), self.bottom_half());
+        let bottom_right = AABB::from_ranges(self.right_half(), self.bottom_half());
 
         Quadrants::from_intersections(
             other.intersects_with(&top_left),
@@ -72,6 +64,26 @@ impl CenteredAABB {
     #[inline]
     pub fn get_aabb(&self) -> AABB {
         AABB::new(self.left(), self.top(), self.right(), self.bottom())
+    }
+
+    #[inline]
+    fn left_half(&self) -> RangeInclusive<i32> {
+        self.left()..=self.center_x
+    }
+
+    #[inline]
+    fn right_half(&self) -> RangeInclusive<i32> {
+        self.center_x..=self.right()
+    }
+
+    #[inline]
+    fn top_half(&self) -> RangeInclusive<i32> {
+        self.top()..=self.center_y
+    }
+
+    #[inline]
+    fn bottom_half(&self) -> RangeInclusive<i32> {
+        self.center_y..=self.bottom()
     }
 
     #[inline]
