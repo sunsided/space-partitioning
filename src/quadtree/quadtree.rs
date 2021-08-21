@@ -111,8 +111,12 @@ where
             let node_data = to_process.pop().unwrap();
 
             // Find the leaves
-            let mut leaves = self.find_leaves_aabb(node_data, element_coords, FindLeafHint::Mutate);
+            let mut leaves = NodeList::default(); // TODO: extract / pool?
+            self.find_leaves_aabb_fn(node_data, element_coords, FindLeafHint::Mutate, |nd| {
+                leaves.push_back(nd);
+            });
 
+            // TODO: Execute in the callback
             while !leaves.is_empty() {
                 let leaf = leaves.pop_back();
 
@@ -275,7 +279,12 @@ where
         // The index of the element (if it was found).
         let mut found_element_idx = free_list::SENTINEL;
 
-        let mut leaves = self.find_leaves_aabb(root, element_coords, FindLeafHint::Mutate);
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        self.find_leaves_aabb_fn(root, element_coords, FindLeafHint::Mutate, |nd| {
+            leaves.push_back(nd);
+        });
+
+        // TODO: Execute in the callback?
         while !leaves.is_empty() {
             let leaf = leaves.pop_back();
             let leaf_node_data = self.nodes[leaf.index as usize];
@@ -359,8 +368,15 @@ where
     }
 
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
-    fn find_leaves_aabb(&self, root: NodeData, rect: &AABB, hint: FindLeafHint) -> NodeList {
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
+    fn find_leaves_aabb_fn<F>(
+        &self,
+        root: NodeData,
+        rect: &AABB,
+        hint: FindLeafHint,
+        mut callback: F,
+    ) where
+        F: FnMut(NodeData),
+    {
         let mut to_process = NodeList::default();
         to_process.push_back(root);
 
@@ -369,7 +385,7 @@ where
 
             // If this node is a leaf, insert it to the list.
             if self.nodes[nd.index as usize].is_leaf() {
-                leaves.push_back(nd);
+                callback(nd);
                 continue;
             }
 
@@ -379,17 +395,15 @@ where
             let quadrants = nd.crect.explore_quadrants_aabb(rect);
             Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants, hint)
         }
-
-        leaves
     }
 
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
-    fn find_leaves_generic<T>(&self, root: NodeData, element: &T) -> NodeList
+    fn find_leaves_generic_fn<T, F>(&self, root: NodeData, element: &T, mut callback: F)
     where
         T: IntersectsWith<AABB>,
+        F: FnMut(NodeData),
     {
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
-        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        let mut to_process = NodeList::default();
         to_process.push_back(root);
 
         while to_process.len() > 0 {
@@ -397,7 +411,7 @@ where
 
             // If this node is a leaf, insert it to the list.
             if self.nodes[nd.index as usize].is_leaf() {
-                leaves.push_back(nd);
+                callback(nd);
                 continue;
             }
 
@@ -413,10 +427,9 @@ where
                 FindLeafHint::Query,
             )
         }
-
-        leaves
     }
 
+    /// Visits all leaf nodes in the tree, passing the node information to the provided closure.
     pub fn visit_leaves<F>(&self, mut visit: F)
     where
         F: FnMut(NodeInfo),
@@ -444,6 +457,7 @@ where
         }
     }
 
+    /// Collects the relevant quadrant nodes.
     #[inline]
     fn collect_relevant_quadrants(
         to_process: &mut NodeList,
@@ -474,6 +488,7 @@ where
         }
     }
 
+    /// Like [`collect_relevant_quadrants_for_query()`] but optimized for mutations (inserts, deletes).
     fn collect_relevant_quadrants_for_mutation(
         to_process: &mut NodeList,
         depth: u8,
@@ -498,6 +513,7 @@ where
         ));
     }
 
+    /// Like [`collect_relevant_quadrants_for_mutation()`] but optimized for queries.
     fn collect_relevant_quadrants_for_query(
         to_process: &mut NodeList,
         depth: u8,
@@ -623,7 +639,11 @@ where
     #[inline]
     pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_aabb(root, rect, FindLeafHint::Query);
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, |nd| {
+            leaves.push_back(nd);
+        });
+
         let capacity = leaves.len() * self.max_num_elements as usize;
         let mut node_set = HashSet::with_capacity(capacity);
         self.intersect_from_leaves(rect, leaves, |id| {
@@ -645,7 +665,10 @@ where
         F: FnMut(ElementId),
     {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_aabb(root, rect, FindLeafHint::Query);
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, |nd| {
+            leaves.push_back(nd);
+        });
         self.intersect_from_leaves(rect, leaves, candidate_fn);
     }
 
@@ -660,7 +683,11 @@ where
         T: IntersectsWith<AABB>,
     {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_generic(root, element);
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        self.find_leaves_generic_fn(root, element, |nd| {
+            leaves.push_back(nd);
+        });
+
         let capacity = leaves.len() * self.max_num_elements as usize;
         let mut node_set = HashSet::with_capacity(capacity);
         self.intersect_from_leaves(element, leaves, |id| {
@@ -683,7 +710,10 @@ where
         F: FnMut(ElementId),
     {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_generic(root, element);
+        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        self.find_leaves_generic_fn(root, element, |nd| {
+            leaves.push_back(nd);
+        });
         self.intersect_from_leaves(element, leaves, candidate_fn);
     }
 
