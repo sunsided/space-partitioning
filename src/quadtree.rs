@@ -22,7 +22,6 @@ pub use quadtree::{QuadTree, QuadTreeElement};
 mod test {
     use super::*;
     use crate::quadtree::quadtree::build_test_tree;
-    use std::iter::FromIterator;
 
     #[test]
     fn insert_once_works() {
@@ -83,7 +82,6 @@ mod test {
 
         // Perform the actual intersection.
         let results = tree.intersect_aabb(&quadrant_tl);
-        let results = Vec::from_iter(results);
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1000));
         assert!(!results.contains(&1001));
@@ -99,7 +97,6 @@ mod test {
 
         // Perform the actual intersection.
         let results = tree.intersect_generic(&quadrant_tl);
-        let results = Vec::from_iter(results);
         assert_eq!(results.len(), 2);
         assert!(results.contains(&1000));
         assert!(!results.contains(&1001));

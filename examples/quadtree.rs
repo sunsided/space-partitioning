@@ -1,13 +1,15 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use piston_window::*;
 use rand::Rng;
 use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{NodeInfo, QuadRect, QuadTreeElement, AABB};
 use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
+use std::iter::FromIterator;
 
 const TREE_DEPTH: u8 = 6;
-const MAX_NUM_ELEMENTS: u32 = 2;
-const NUM_STATIC_ELEMENTS: u32 = 64;
+const MAX_NUM_ELEMENTS: u32 = 1;
+const NUM_STATIC_ELEMENTS: u32 = 512;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -40,7 +42,7 @@ fn main() {
     let opengl = OpenGL::V4_5;
     let mut window: PistonWindow = WindowSettings::new("QuadTree", [800, 800])
         .exit_on_esc(true)
-        .vsync(true)
+        .vsync(false)
         .graphics_api(opengl)
         .build()
         .unwrap();
@@ -56,7 +58,17 @@ fn main() {
     let (mut tree, mut items) = build_test_data();
     let _ = tree.insert(mouse.build_qte(&window_size));
 
+    let pb = ProgressBar::new(0);
+    pb.set_message("Simulating");
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("[{spinner}] [{elapsed_precise} {per_sec:.cyan/blue}] {msg}"),
+    );
+
+    let mut cycles = 0;
     while let Some(e) = window.next() {
+        cycles += 1;
+
         if let Some(args) = e.button_args() {
             if args.state == ButtonState::Press {
                 match args.button {
@@ -91,6 +103,9 @@ fn main() {
         }
 
         if let Some(args) = e.update_args() {
+            pb.inc(cycles);
+            cycles = 0;
+
             rotation += 3.0 * args.dt;
 
             // Update the ray.
@@ -165,11 +180,11 @@ fn intersect_with_mouse(
         (y + cursor_size).ceil() as _,
     );
 
-    tree.intersect_aabb(&aabb)
+    HashSet::from_iter(tree.intersect_aabb(&aabb).into_iter())
 }
 
 fn intersect_with_ray(tree: &QuadTree, ray: &Ray) -> HashSet<u32> {
-    tree.intersect_generic(ray)
+    HashSet::from_iter(tree.intersect_generic(ray).into_iter())
 }
 
 fn render_disks(
@@ -266,11 +281,15 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
     // Build some static elements.
     for i in 0..NUM_STATIC_ELEMENTS {
         let mut rng = rand::thread_rng();
+
+        let large = rng.gen::<f64>() <= 0.05;
+        let size = if large { 24. } else { 8. };
+
         let item = Disk {
             id: (i + 1) as _,
             cx: rng.gen_range(-256.0..256.0),
             cy: rng.gen_range(-256.0..256.0),
-            radius: rng.gen_range(2.0..16.0),
+            radius: rng.gen_range(2.0..size),
         };
 
         tree.insert(QuadTreeElement::new(item.id, item.get_aabb()))

@@ -15,7 +15,7 @@ The example showcases a ray-box test where a 2D ray is implemented using `f32`. 
 be started using
 
 ```console
-$ cargo run --example quadtree
+$ cargo run --release --example quadtree
 ```
 
 ![Ray-Box Test in QuadTree](docs/ray-box-test.png)

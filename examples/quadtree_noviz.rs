@@ -4,11 +4,12 @@ use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
 use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
+use std::iter::FromIterator;
 use std::time::Duration;
 
 const TREE_DEPTH: u8 = 6;
-const MAX_NUM_ELEMENTS: u32 = 2;
-const NUM_STATIC_ELEMENTS: u32 = 64;
+const MAX_NUM_ELEMENTS: u32 = 1;
+const NUM_STATIC_ELEMENTS: u32 = 512;
 const CURSOR_SIZE: f64 = 64.0;
 
 struct Disk {
@@ -37,8 +38,7 @@ fn main() {
     pb.set_message("Simulating");
     pb.set_style(
         ProgressStyle::default_spinner()
-            .template("[{spinner}] [{elapsed_precise} {per_sec:.cyan/blue}] {msg}")
-            .progress_chars("##-"),
+            .template("[{spinner}] [{elapsed_precise} {per_sec:.cyan/blue}] {msg}"),
     );
 
     let dt = 0.016666666666666666;
@@ -104,11 +104,19 @@ fn intersect_with_mouse(
         (y + cursor_size).ceil() as _,
     );
 
-    tree.intersect_aabb(&aabb)
+    let vec = tree.intersect_aabb(&aabb);
+    let vec_len = vec.len();
+    let set = HashSet::from_iter(vec.into_iter());
+    debug_assert_eq!(vec_len, set.len());
+    set
 }
 
 fn intersect_with_ray(tree: &QuadTree, ray: &Ray) -> HashSet<u32> {
-    tree.intersect_generic(ray)
+    let vec = tree.intersect_generic(ray);
+    let vec_len = vec.len();
+    let set = HashSet::from_iter(vec.into_iter());
+    debug_assert_eq!(vec_len, set.len());
+    set
 }
 
 fn build_test_data() -> (QuadTree, Vec<Disk>) {
@@ -135,11 +143,14 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
     // Build some static elements.
     for i in 0..NUM_STATIC_ELEMENTS {
         let mut rng = rand::thread_rng();
+        let large = rng.gen::<f64>() <= 0.05;
+        let size = if large { 24. } else { 8. };
+
         let item = Disk {
             id: (i + 1) as _,
             cx: rng.gen_range(-256.0..256.0),
             cy: rng.gen_range(-256.0..256.0),
-            radius: rng.gen_range(2.0..16.0),
+            radius: rng.gen_range(2.0..size),
         };
 
         tree.insert(QuadTreeElement::new(item.id, item.get_aabb()))
