@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Internal
+
+- The `QuadTree` now stores elements that intersect multiple quadrants
+  in a separate node, reducing the total number of insertions and intersection tests.
+
 ## 0.4.0 - 2021-08-21
 
 ### Added

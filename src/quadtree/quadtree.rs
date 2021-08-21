@@ -15,6 +15,16 @@ use smallvec::SmallVec;
 
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+enum FindLeafHint {
+    /// A tree query, e.g. an intersection test.
+    /// These queries need to visit all leaves.
+    Query,
+    /// A tree mutation, i.e. insert or remove.
+    /// These queries skip exploration of child nodes whenever possible.
+    Mutate,
+}
+
 /// A QuadTree implementation as described in [Efficient Quadtrees](https://stackoverflow.com/a/48330314/195651).
 ///
 /// # Remarks
@@ -100,7 +110,7 @@ where
             let node_data = to_process.pop().unwrap();
 
             // Find the leaves
-            let mut leaves = self.find_leaves_aabb(node_data, element_coords);
+            let mut leaves = self.find_leaves_aabb(node_data, element_coords, FindLeafHint::Mutate);
 
             while !leaves.is_empty() {
                 let leaf = leaves.pop_back();
@@ -138,7 +148,7 @@ where
     }
 
     /// Splits the specified [`parent`] node into four and distributes its
-    /// elements onto the newly created childs.
+    /// elements onto the newly created children.
     fn distribute_elements_to_child_nodes(&mut self, parent: &NodeData) {
         let first_child_index = self.ensure_child_nodes_exist();
 
@@ -175,6 +185,9 @@ where
     fn ensure_child_nodes_exist(&mut self) -> u32 {
         if self.free_node == free_list::SENTINEL {
             let node_index = self.nodes.len() as IndexType;
+            // The first node captures all elements spanning more than one child.
+            self.nodes.push(Node::default());
+            // The four childs.
             for _ in 0..4 {
                 self.nodes.push(Node::default());
             }
@@ -204,25 +217,33 @@ where
         element_index: free_list::IndexType,
         element_rect: &AABB,
     ) {
-        let insert_top = element_rect.tl.y <= my;
-        let insert_bottom = element_rect.br.y > my;
         let insert_left = element_rect.tl.x <= mx;
         let insert_right = element_rect.br.x > mx;
+        let insert_top = element_rect.tl.y <= my;
+        let insert_bottom = element_rect.br.y > my;
 
-        // TODO: If an element covers more than one child node, store it separately.
-        //       let covers_many = (insert_top & insert_bottom) | (insert_left & insert_right);
-
-        if insert_top & insert_left {
+        // If an element covers more than one child node, we store it separately.
+        let covers_many = (insert_top & insert_bottom) | (insert_left & insert_right);
+        if covers_many {
             self.insert_element_in_child_node(first_child_index + 0, element_index);
+            return;
         }
-        if insert_top & insert_right {
+
+        // At this point, exactly one of the quadrants is selected.
+        debug_assert!(
+            (insert_top & insert_left)
+                || (insert_top & insert_right)
+                || (insert_bottom & insert_left)
+                || (insert_bottom && insert_right)
+        );
+        if insert_top & insert_left {
             self.insert_element_in_child_node(first_child_index + 1, element_index);
-        }
-        if insert_bottom & insert_left {
+        } else if insert_top & insert_right {
             self.insert_element_in_child_node(first_child_index + 2, element_index);
-        }
-        if insert_bottom & insert_right {
+        } else if insert_bottom & insert_left {
             self.insert_element_in_child_node(first_child_index + 3, element_index);
+        } else if insert_bottom & insert_right {
+            self.insert_element_in_child_node(first_child_index + 4, element_index);
         }
     }
 
@@ -253,7 +274,7 @@ where
         // The index of the element (if it was found).
         let mut found_element_idx = free_list::SENTINEL;
 
-        let mut leaves = self.find_leaves_aabb(root, element_coords);
+        let mut leaves = self.find_leaves_aabb(root, element_coords, FindLeafHint::Mutate);
         while !leaves.is_empty() {
             let leaf = leaves.pop_back();
             let leaf_node_data = self.nodes[leaf.index as usize];
@@ -337,7 +358,7 @@ where
     }
 
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
-    fn find_leaves_aabb(&self, root: NodeData, rect: &AABB) -> NodeList {
+    fn find_leaves_aabb(&self, root: NodeData, rect: &AABB, hint: FindLeafHint) -> NodeList {
         let mut leaves = NodeList::default(); // TODO: extract / pool?
         let mut to_process = NodeList::default();
         to_process.push_back(root);
@@ -355,7 +376,7 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_aabb(rect);
-            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants)
+            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants, hint)
         }
 
         leaves
@@ -383,7 +404,13 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_generic(element);
-            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants)
+            Self::collect_relevant_quadrants(
+                &mut to_process,
+                &nd,
+                fc,
+                quadrants,
+                FindLeafHint::Query,
+            )
         }
 
         leaves
@@ -406,7 +433,13 @@ where
             }
 
             let fc = self.nodes[nd.index as usize].get_first_child_node_index();
-            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, Quadrants::all())
+            Self::collect_relevant_quadrants(
+                &mut to_process,
+                &nd,
+                fc,
+                Quadrants::all(),
+                FindLeafHint::Query,
+            )
         }
     }
 
@@ -415,6 +448,7 @@ where
         nd: &NodeData,
         first_child_id: u32,
         quadrants: Quadrants,
+        hint: FindLeafHint,
     ) {
         let mx = nd.crect.center_x;
         let my = nd.crect.center_y;
@@ -424,13 +458,37 @@ where
         let l = nd.crect.left();
         let t = nd.crect.top();
 
+        let is_query = hint == FindLeafHint::Query;
+
+        // In intersection tests we always need to explore the self node.
+        let collect_self = quadrants.this | is_query;
+        if collect_self {
+            to_process.push_back(NodeData::new(
+                l,
+                t,
+                hx << 1,
+                hy << 1,
+                first_child_id + 0,
+                // The "this" node is at the same depth and cannot split.
+                nd.depth + 0,
+                false,
+            ));
+        }
+
+        // Only collect child nodes if there was no self match
+        // or if we are trying to intersect.
+        let collect_childs = (!quadrants.this) | is_query;
+        if !collect_childs {
+            return;
+        }
+
         if quadrants.top_left {
             to_process.push_back(NodeData::new(
                 l,
                 t,
                 hx,
                 hy,
-                first_child_id + 0,
+                first_child_id + 1,
                 nd.depth + 1,
                 true,
             ));
@@ -441,7 +499,7 @@ where
                 t,
                 hx,
                 hy,
-                first_child_id + 1,
+                first_child_id + 2,
                 nd.depth + 1,
                 true,
             ));
@@ -452,7 +510,7 @@ where
                 my,
                 hx,
                 hy,
-                first_child_id + 2,
+                first_child_id + 3,
                 nd.depth + 1,
                 true,
             ));
@@ -463,7 +521,7 @@ where
                 my,
                 hx,
                 hy,
-                first_child_id + 3,
+                first_child_id + 4,
                 nd.depth + 1,
                 true,
             ));
@@ -493,7 +551,7 @@ where
 
             // Loop through the children.
             let mut num_empty_leaves = 0usize;
-            for j in 0..4 {
+            for j in 0..5 {
                 let child_index = first_child_index + j;
                 let child = &self.nodes[child_index as usize];
 
@@ -511,8 +569,8 @@ where
 
             // If all the children were empty leaves, remove them and
             // make this node the new empty leaf.
-            if num_empty_leaves == 4 {
-                // Push all 4 children to the free list.
+            if num_empty_leaves == 5 {
+                // Push all 5 children to the free list.
                 // (We don't change the indexes of the 2nd to 4th child because
                 // child nodes are always processed together.)
                 self.nodes[first_child_index as usize].first_child_or_element = self.free_node;
@@ -539,7 +597,7 @@ where
             let index = to_process.pop().unwrap();
             let node = &self.nodes[index];
             if node.is_branch() {
-                for j in 0..4 {
+                for j in 0..5 {
                     to_process.push((node.first_child_or_element + j) as usize);
                 }
             } else {
@@ -565,7 +623,7 @@ where
     #[inline]
     pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_aabb(root, rect);
+        let leaves = self.find_leaves_aabb(root, rect, FindLeafHint::Query);
         let capacity = leaves.len() * self.max_num_elements as usize;
         let mut node_set = HashSet::with_capacity(capacity);
         self.intersect_from_leaves(rect, leaves, |id| {
@@ -587,7 +645,7 @@ where
         F: FnMut(ElementId),
     {
         let root = self.get_root_node_data();
-        let leaves = self.find_leaves_aabb(root, rect);
+        let leaves = self.find_leaves_aabb(root, rect, FindLeafHint::Query);
         self.intersect_from_leaves(rect, leaves, candidate_fn);
     }
 
@@ -690,7 +748,7 @@ pub(crate) fn build_test_tree() -> QuadTree {
     // Each of the first five elements creates a single reference
     // in each of the quadrants. The "center" element covers
     // all four quadrants, and therefore adds another four references.
-    assert_eq!(tree.count_element_references(), 9);
+    assert_eq!(tree.count_element_references(), 6);
 
     // Ensure we have the exact elements inserted.
     let inserted_ids = tree.collect_ids();
@@ -727,13 +785,17 @@ mod test {
         // bottom-right
         tree.insert(QuadTreeElement::new(4000, AABB::new(5, 5, 15, 15)))
             .expect("insert should work");
+
+        // Similar to index test.
+        assert_eq!(tree.collect_ids().len(), 5);
+
         // center
         tree.insert(QuadTreeElement::new(5000, AABB::new(-5, -5, 5, 5)))
             .expect("insert should work");
 
         // Similar to index test.
         assert_eq!(tree.collect_ids().len(), 6);
-        assert_eq!(tree.count_element_references(), 9);
+        assert_eq!(tree.count_element_references(), 6);
 
         // Erase the all elements.
         assert!(tree.remove(&QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5))));
