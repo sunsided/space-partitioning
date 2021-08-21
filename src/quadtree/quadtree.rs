@@ -183,7 +183,13 @@ where
     /// Recycles child nodes from the free list or creates
     /// new child nodes if needed.
     fn ensure_child_nodes_exist(&mut self) -> u32 {
-        if self.free_node == free_list::SENTINEL {
+        if self.free_node != free_list::SENTINEL {
+            let node_index = self.free_node;
+            let next_free_node = self.nodes[node_index as usize].first_child_or_element;
+            self.nodes[node_index as usize] = Node::default();
+            self.free_node = next_free_node;
+            node_index
+        } else {
             let node_index = self.nodes.len() as IndexType;
             // The first node captures all elements spanning more than one child.
             self.nodes.push(Node::default());
@@ -191,12 +197,6 @@ where
             for _ in 0..4 {
                 self.nodes.push(Node::default());
             }
-            node_index
-        } else {
-            let node_index = self.free_node;
-            let next_free_node = self.nodes[node_index as usize].first_child_or_element;
-            self.nodes[node_index as usize] = Node::default();
-            self.free_node = next_free_node;
             node_index
         }
     }
@@ -460,6 +460,56 @@ where
 
         let is_query = hint == FindLeafHint::Query;
 
+        // Only collect child nodes if there was no self match
+        // or if we are trying to intersect.
+        let collect_children = (!quadrants.this) | is_query;
+        if collect_children {
+            if quadrants.bottom_right {
+                to_process.push_back(NodeData::new(
+                    mx,
+                    my,
+                    hx,
+                    hy,
+                    first_child_id + 4,
+                    nd.depth + 1,
+                    true,
+                ));
+            }
+            if quadrants.bottom_left {
+                to_process.push_back(NodeData::new(
+                    l,
+                    my,
+                    hx,
+                    hy,
+                    first_child_id + 3,
+                    nd.depth + 1,
+                    true,
+                ));
+            }
+            if quadrants.top_right {
+                to_process.push_back(NodeData::new(
+                    mx,
+                    t,
+                    hx,
+                    hy,
+                    first_child_id + 2,
+                    nd.depth + 1,
+                    true,
+                ));
+            }
+            if quadrants.top_left {
+                to_process.push_back(NodeData::new(
+                    l,
+                    t,
+                    hx,
+                    hy,
+                    first_child_id + 1,
+                    nd.depth + 1,
+                    true,
+                ));
+            }
+        }
+
         // In intersection tests we always need to explore the self node.
         let collect_self = quadrants.this | is_query;
         if collect_self {
@@ -472,58 +522,6 @@ where
                 // The "this" node is at the same depth and cannot split.
                 nd.depth + 0,
                 false,
-            ));
-        }
-
-        // Only collect child nodes if there was no self match
-        // or if we are trying to intersect.
-        let collect_childs = (!quadrants.this) | is_query;
-        if !collect_childs {
-            return;
-        }
-
-        if quadrants.top_left {
-            to_process.push_back(NodeData::new(
-                l,
-                t,
-                hx,
-                hy,
-                first_child_id + 1,
-                nd.depth + 1,
-                true,
-            ));
-        }
-        if quadrants.top_right {
-            to_process.push_back(NodeData::new(
-                mx,
-                t,
-                hx,
-                hy,
-                first_child_id + 2,
-                nd.depth + 1,
-                true,
-            ));
-        }
-        if quadrants.bottom_left {
-            to_process.push_back(NodeData::new(
-                l,
-                my,
-                hx,
-                hy,
-                first_child_id + 3,
-                nd.depth + 1,
-                true,
-            ));
-        }
-        if quadrants.bottom_right {
-            to_process.push_back(NodeData::new(
-                mx,
-                my,
-                hx,
-                hy,
-                first_child_id + 4,
-                nd.depth + 1,
-                true,
             ));
         }
     }
