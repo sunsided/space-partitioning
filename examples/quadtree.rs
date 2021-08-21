@@ -7,9 +7,9 @@ use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
 use std::iter::FromIterator;
 
-const TREE_DEPTH: u8 = 6;
+const TREE_DEPTH: u8 = 8;
 const MAX_NUM_ELEMENTS: u32 = 1;
-const NUM_STATIC_ELEMENTS: u32 = 512;
+const NUM_STATIC_ELEMENTS: u32 = 256;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -22,7 +22,7 @@ const RAY: [f32; 4] = [1.0, 0.5, 0.0, 1.0];
 
 const QUAD_CELL_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const QUAD_CELL_FULL: [f32; 4] = [0.25, 0.25, 0.25, 0.25];
-const QUAD_CELL_EMPTY: [f32; 4] = [0.25, 0.25, 0.25, 0.125];
+const QUAD_CELL_EMPTY: [f32; 4] = [0.25, 0.25, 0.25, 0.05];
 
 const CURSOR_SIZE: f64 = 64.0;
 
@@ -47,6 +47,19 @@ fn main() {
         .build()
         .unwrap();
 
+    window.set_ups(120);
+    window.set_swap_buffers(true);
+
+    let ellipse = Ellipse::new(BLACK).resolution(16).border(
+        Ellipse::new_border(BLACK, 1.0)
+            .resolution(16)
+            .border
+            .unwrap(),
+    );
+
+    let rectangle =
+        Rectangle::new(BLACK).border(Rectangle::new_border(QUAD_CELL_BORDER, 1.0).border.unwrap());
+
     let mut rotation = 0.0;
     let mut window_size = [0.0; 2];
     let mut items_under_mouse = HashSet::default();
@@ -57,18 +70,17 @@ fn main() {
 
     let (mut tree, mut items) = build_test_data();
     let _ = tree.insert(mouse.build_qte(&window_size));
+    let mut tree_structure = collect_tree_structure(&tree);
 
-    let pb = ProgressBar::new(0);
+    let pb = ProgressBar::new_spinner();
+    pb.set_draw_rate(5);
     pb.set_message("Simulating");
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("[{spinner}] [{elapsed_precise} {per_sec:.cyan/blue}] {msg}"),
     );
 
-    let mut cycles = 0;
     while let Some(e) = window.next() {
-        cycles += 1;
-
         if let Some(args) = e.button_args() {
             if args.state == ButtonState::Press {
                 match args.button {
@@ -80,6 +92,7 @@ fn main() {
                         // Generate new data points
                         let (new_tree, new_items) = build_test_data();
                         let _ = tree.insert(mouse.build_qte(&window_size));
+                        tree_structure = collect_tree_structure(&tree);
                         tree = new_tree;
                         items = new_items;
                     }
@@ -103,9 +116,7 @@ fn main() {
         }
 
         if let Some(args) = e.update_args() {
-            pb.inc(cycles);
-            cycles = 0;
-
+            pb.inc(1);
             rotation += 3.0 * args.dt;
 
             // Update the ray.
@@ -122,45 +133,53 @@ fn main() {
             // Compact the tree.
             tree.cleanup();
 
+            // Update the visualization.
+            tree_structure = collect_tree_structure(&tree);
+
             // Get new intersections.
             items_under_mouse =
                 intersect_with_mouse(&mut tree, &mut window_size, mouse.pos, CURSOR_SIZE);
             items_under_ray = intersect_with_ray(&mut tree, &ray);
         }
 
-        if let Some(args) = e.render_args() {
-            window.draw_2d(&e, |c, g, _| {
-                clear([1.0; 4], g);
+        window.draw_2d(&e, |c, g, _| {
+            clear([1.0; 4], g);
 
-                {
-                    // Move to window center.
-                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
-                    let c = c.trans(half_window_size[0], half_window_size[1]);
+            let half_window_size = [window_size[0] * 0.5, window_size[1] * 0.5];
 
-                    render_tree_nodes(&tree, g, &c);
-                    render_disks(&items, g, &c, &items_under_mouse, &items_under_ray);
-                }
+            // Render the tree and its elements.
+            {
+                let c = c.trans(half_window_size[0], half_window_size[1]);
+                render_tree_nodes(&tree_structure, g, &c, &rectangle);
+                render_disks(
+                    &items,
+                    g,
+                    &c,
+                    &items_under_mouse,
+                    &items_under_ray,
+                    &ellipse,
+                );
+            }
 
-                // Render the mouse cursor.
+            // Render the mouse cursor.
+            {
                 let rect = [
                     mouse.pos[0] - CURSOR_SIZE * 0.5,
                     mouse.pos[1] - CURSOR_SIZE * 0.5,
                     CURSOR_SIZE,
                     CURSOR_SIZE,
                 ];
-                rectangle(MOUSE, rect, c.transform, g);
-                Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+                rectangle
+                    .color(MOUSE)
+                    .draw(rect, &c.draw_state, c.transform, g);
+            }
 
-                {
-                    // Move to window center.
-                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
-                    let c = c.trans(half_window_size[0], half_window_size[1]);
-
-                    // Draw the ray
-                    render_ray(&ray, g, c);
-                }
-            });
-        }
+            // Render the ray.
+            {
+                let c = c.trans(half_window_size[0], half_window_size[1]);
+                render_ray(&ray, g, c);
+            }
+        });
     }
 }
 
@@ -193,6 +212,7 @@ fn render_disks(
     c: &Context,
     mouse_matches: &HashSet<u32>,
     ray_matches: &HashSet<u32>,
+    ellipse: &Ellipse,
 ) {
     for disk in items.iter() {
         let rect = [
@@ -215,12 +235,27 @@ fn render_disks(
             DISK
         };
 
-        ellipse(color, rect, c.transform, g);
-        Ellipse::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+        ellipse
+            .color(color)
+            .draw(rect, &c.draw_state, c.transform, g);
     }
 }
 
-fn render_tree_nodes(tree: &QuadTree, g: &mut G2d, c: &Context) {
+fn render_tree_nodes(
+    tree_rects: &Vec<([f64; 4], [f32; 4])>,
+    g: &mut G2d,
+    c: &Context,
+    rectangle: &Rectangle,
+) {
+    for (rect, color) in tree_rects.iter() {
+        rectangle
+            .color(*color)
+            .draw(*rect, &c.draw_state, c.transform, g);
+    }
+}
+
+fn collect_tree_structure(tree: &QuadTree) -> Vec<([f64; 4], [f32; 4])> {
+    let mut rects = Vec::with_capacity(64);
     tree.visit_leaves(|node| {
         let aabb: AABB = node.get_aabb();
         let rect = [
@@ -229,9 +264,10 @@ fn render_tree_nodes(tree: &QuadTree, g: &mut G2d, c: &Context) {
             (aabb.br.x - aabb.tl.x) as f64,
             (aabb.br.y - aabb.tl.y) as f64,
         ];
-        rectangle(node_color(&node), rect, c.transform, g);
-        Rectangle::new_border(QUAD_CELL_BORDER, 1.0).draw(rect, &c.draw_state, c.transform, g);
+        let color = node_color(&node);
+        rects.push((rect, color));
     });
+    rects
 }
 
 fn render_ray(ray: &Ray, g: &mut G2d, c: Context) {

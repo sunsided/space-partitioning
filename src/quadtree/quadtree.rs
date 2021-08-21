@@ -444,6 +444,16 @@ where
         while to_process.len() > 0 {
             let nd = to_process.pop_back();
 
+            // If the index is divisible by 5, this node is referring to the
+            // parent itself. We skip enumerating this one since the proper child
+            // nodes will be enumerated individually.
+            // We subtract one to account for the root node.
+            let is_this_node = nd.index > 0 && ((nd.index - 1) % 5) == 0;
+            if is_this_node {
+                debug_assert!(self.nodes[nd.index as usize].is_leaf());
+                continue;
+            }
+
             let node = &self.nodes[nd.index as usize];
             if node.is_leaf() {
                 visit(NodeInfo::from(nd, node.element_count));
