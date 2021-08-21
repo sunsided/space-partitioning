@@ -215,8 +215,12 @@ fn render_disks(
             DISK
         };
 
-        ellipse(color, rect, c.transform, g);
-        Ellipse::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+        Ellipse::new(color)
+            .resolution(16)
+            .draw(rect, &c.draw_state, c.transform, g);
+        Ellipse::new_border(BLACK, 1.0)
+            .resolution(16)
+            .draw(rect, &c.draw_state, c.transform, g);
     }
 }
 
