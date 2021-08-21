@@ -5,6 +5,11 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+- The `intersect_X()` methods now return a vector, removing the need for the
+  [hashbrown](https://crates.io/crates/hashbrown) crate. This is a breaking change.
+
 ### Internal
 
 - The `QuadTree` now stores elements that intersect multiple quadrants

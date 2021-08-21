@@ -3,8 +3,8 @@ use piston_window::*;
 use rand::Rng;
 use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{NodeInfo, QuadRect, QuadTreeElement, AABB};
-use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
+use std::collections::HashSet;
 use std::iter::FromIterator;
 
 const TREE_DEPTH: u8 = 8;

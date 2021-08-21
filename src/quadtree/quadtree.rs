@@ -729,7 +729,7 @@ where
     }
 
     #[inline]
-    fn intersect_from_leaf<T, F>(&self, rect: &T, leaf_data: NodeData, mut candidate_fn: F)
+    fn intersect_from_leaf<T, F>(&self, element: &T, leaf_data: NodeData, mut candidate_fn: F)
     where
         T: IntersectsWith<AABB>,
         F: FnMut(ElementId),
@@ -744,7 +744,7 @@ where
 
             // Depending on the size of the quadrant, the candidate element
             // might still not be covered by the search rectangle.
-            if rect.intersects_with(&elem_rect) {
+            if element.intersects_with(&elem_rect) {
                 let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
                 candidate_fn(elem_id);
             }

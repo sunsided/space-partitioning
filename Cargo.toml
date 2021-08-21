@@ -26,12 +26,8 @@ path = "examples/quadtree_noviz.rs"
 name = "bench_quadtree"
 harness = false
 
-[features]
-default = ["hashbrown"]
-
 [dependencies]
 smallvec = { version = "1.6.1", features = ["union", "const_generics"] }
-hashbrown = { version = "0.11.2", optional = true }
 
 # Build all dependencies (but not this workspace) with optimizations enabled.
 [profile.dev.package."*"]

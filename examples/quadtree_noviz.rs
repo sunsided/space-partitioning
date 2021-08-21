@@ -2,8 +2,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rand::{thread_rng, Rng};
 use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
-use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
+use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::time::Duration;
 
