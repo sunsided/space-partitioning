@@ -4,6 +4,7 @@ use crate::quadtree::AABB;
 
 /// A centered axis-aligned bounding box.
 #[derive(Debug, Default)]
+#[repr(C, align(8))]
 pub struct CenteredAABB {
     /// The center X coordinate.
     pub center_x: i32,

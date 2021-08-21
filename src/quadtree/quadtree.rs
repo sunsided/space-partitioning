@@ -8,26 +8,12 @@ use crate::quadtree::node_info::NodeInfo;
 use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
 use crate::quadtree::quadrants::Quadrants;
+use crate::quadtree::quadtree_element::QuadTreeElementNode;
 pub use crate::quadtree::quadtree_element::{ElementIdType, QuadTreeElement};
 use crate::types::HashSet;
 use smallvec::SmallVec;
 
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
-
-/// Represents an element node in the quadtree.
-///
-/// # Remarks
-/// An element (`QuadTreeElement`) is only inserted once to the quadtree no matter how many
-/// cells it occupies. However, for each cell it occupies, an "element node" (`QuadTreeElementNode`)
-/// is inserted which indexes that element.
-#[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
-struct QuadTreeElementNode {
-    /// Points to the next element in the leaf node. A value of `free_list::SENTINEL`
-    /// indicates the end of the list.
-    next: free_list::IndexType,
-    /// Stores the element index.
-    element_idx: free_list::IndexType,
-}
 
 /// A QuadTree implementation as described in [Efficient Quadtrees](https://stackoverflow.com/a/48330314/195651).
 ///
@@ -57,12 +43,12 @@ where
     /// list is empty, at which point we simply insert 4 nodes to the
     /// back of the nodes array.
     free_node: free_list::IndexType,
-    /// Stores the maximum depth allowed for the quadtree.
-    max_depth: u32,
     /// Stores the maximum number of elements allowed before a node splits.
     max_num_elements: u32,
     /// We use this value to determine whether a node can be split.
     smallest_cell_size: u32,
+    /// Stores the maximum depth allowed for the quadtree.
+    max_depth: u8,
 }
 
 impl<ElementId> QuadTree<ElementId>
@@ -75,7 +61,7 @@ where
 
     pub fn new(
         root_rect: QuadRect,
-        max_depth: u32,
+        max_depth: u8,
         max_num_elements: u32,
         smallest_cell_size: u32,
     ) -> Self {
@@ -435,8 +421,8 @@ where
         let hx = nd.crect.half_width;
         let hy = nd.crect.half_height;
 
-        let l = mx - hx;
-        let t = my - hy;
+        let l = nd.crect.left();
+        let t = nd.crect.top();
 
         if quadrants.top_left {
             to_process.push_back(NodeData::new(
@@ -446,6 +432,7 @@ where
                 hy,
                 first_child_id + 0,
                 nd.depth + 1,
+                true,
             ));
         }
         if quadrants.top_right {
@@ -456,6 +443,7 @@ where
                 hy,
                 first_child_id + 1,
                 nd.depth + 1,
+                true,
             ));
         }
         if quadrants.bottom_left {
@@ -466,6 +454,7 @@ where
                 hy,
                 first_child_id + 2,
                 nd.depth + 1,
+                true,
             ));
         }
         if quadrants.bottom_right {
@@ -476,6 +465,7 @@ where
                 hy,
                 first_child_id + 3,
                 nd.depth + 1,
+                true,
             ));
         }
     }
@@ -564,7 +554,7 @@ where
 
     #[inline]
     fn get_root_node_data(&self) -> NodeData {
-        NodeData::new_from_root(&self.root_rect)
+        NodeData::new_from_root(&self.root_rect, true)
     }
 
     /// Returns the set of IDs that occupy space within the

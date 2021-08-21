@@ -70,7 +70,7 @@ fn build_random_tree(
     num_elements: u32,
     width: i32,
     height: i32,
-    depth: u32,
+    depth: u8,
 ) -> QuadTree {
     let mut tree = QuadTree::new(QuadRect::new(0, 0, width, height), depth, 16, 1);
     for id in 0..num_elements {

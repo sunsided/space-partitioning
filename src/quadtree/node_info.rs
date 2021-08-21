@@ -17,7 +17,7 @@ impl NodeInfo {
     }
 
     /// Gets the depth of this node.
-    pub fn depth(&self) -> u32 {
+    pub fn depth(&self) -> u8 {
         self.nd.depth
     }
 
