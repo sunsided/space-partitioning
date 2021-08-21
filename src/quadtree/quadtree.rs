@@ -1,8 +1,7 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
 use crate::quadtree::error::InsertError;
-use crate::quadtree::free_list;
-use crate::quadtree::free_list::{FreeList, IndexType};
+use crate::quadtree::free_list::{self, FreeList, IndexType};
 use crate::quadtree::node::Node;
 use crate::quadtree::node_data::{NodeData, NodeIndexType};
 use crate::quadtree::node_info::NodeInfo;
@@ -224,6 +223,9 @@ where
         let insert_left = element_rect.tl.x <= mx;
         let insert_right = element_rect.br.x > mx;
 
+        // TODO: If an element covers more than one child node, store it separately.
+        //       let covers_many = (insert_top & insert_bottom) | (insert_left & insert_right);
+
         if insert_top & insert_left {
             self.insert_element_in_child_node(first_child_index + 0, element_index);
         }
@@ -351,7 +353,7 @@ where
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
     fn find_leaves_aabb(&self, root: NodeData, rect: &AABB) -> NodeList {
         let mut leaves = NodeList::default(); // TODO: extract / pool?
-        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        let mut to_process = NodeList::default();
         to_process.push_back(root);
 
         while to_process.len() > 0 {
@@ -405,7 +407,7 @@ where
     where
         F: FnMut(NodeInfo),
     {
-        let mut to_process = NodeList::default(); // TODO: measure max size - back by SmallVec?
+        let mut to_process = NodeList::default();
         to_process.push_back(self.get_root_node_data());
 
         while to_process.len() > 0 {
@@ -511,7 +513,7 @@ where
                 // leaf. Otherwise if the child is a branch, add it to
                 // the stack to be processed in the next iteration.
                 if child.is_empty() {
-                    num_empty_leaves += 1; // TODO: Reverse, compare to zero
+                    num_empty_leaves += 1;
                 } else if child.is_branch() {
                     to_process.push(child_index);
                 }
@@ -520,7 +522,6 @@ where
             // If all the children were empty leaves, remove them and
             // make this node the new empty leaf.
             if num_empty_leaves == 4 {
-                // TODO: Reverse, compare to zero?
                 // Push all 4 children to the free list.
                 // (We don't change the indexes of the 2nd to 4th child because
                 // child nodes are always processed together.)
@@ -528,8 +529,7 @@ where
                 self.free_node = first_child_index;
 
                 // Make this node the new empty leaf.
-                let node = &mut self.nodes[node_index as usize];
-                node.make_empty_leaf();
+                self.nodes[node_index as usize].make_empty_leaf();
 
                 tree_compacted = true;
             }
