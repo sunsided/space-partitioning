@@ -1,5 +1,6 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::aabb::AABB;
+use crate::quadtree::centered_aabb::CenteredAABB;
 use crate::quadtree::error::InsertError;
 use crate::quadtree::free_list::{self, FreeList, IndexType};
 use crate::quadtree::node::Node;
@@ -443,6 +444,7 @@ where
         }
     }
 
+    #[inline]
     fn collect_relevant_quadrants(
         to_process: &mut NodeList,
         nd: &NodeData,
@@ -450,80 +452,80 @@ where
         quadrants: Quadrants,
         hint: FindLeafHint,
     ) {
-        let mx = nd.crect.center_x;
-        let my = nd.crect.center_y;
-        let hx = nd.crect.half_width;
-        let hy = nd.crect.half_height;
+        // Opportunistically calculate the new child rects.
+        // With inlining in place the compiler should be able to simplify some calculations.
+        let split_quadrants = nd.crect.split_quadrants();
 
-        let l = nd.crect.left();
-        let t = nd.crect.top();
+        match hint {
+            FindLeafHint::Query => Self::collect_relevant_quadrants_for_query(
+                to_process,
+                nd.depth,
+                first_child_id,
+                quadrants,
+                &split_quadrants,
+            ),
+            FindLeafHint::Mutate => Self::collect_relevant_quadrants_for_mutation(
+                to_process,
+                nd.depth,
+                first_child_id,
+                quadrants,
+                &split_quadrants,
+            ),
+        }
+    }
 
-        let is_query = hint == FindLeafHint::Query;
+    fn collect_relevant_quadrants_for_mutation(
+        to_process: &mut NodeList,
+        depth: u8,
+        first_child_id: u32,
+        quadrants: Quadrants,
+        split_quadrants: &[CenteredAABB; 5],
+    ) {
+        let offset = quadrants.mutation_index();
+        debug_assert!(offset <= 4);
 
-        // Only collect child nodes if there was no self match
-        // or if we are trying to intersect.
-        let collect_children = (!quadrants.this) | is_query;
-        if collect_children {
-            if quadrants.bottom_right {
+        // The "this" node at offset 0 cannot be split.
+        let can_split = offset > 0;
+
+        // The child depth only increases for the non-"this" node.
+        let child_depth = depth + (1 - quadrants.this() as u8);
+
+        to_process.push_back(NodeData::new(
+            split_quadrants[offset as usize],
+            first_child_id + offset,
+            child_depth,
+            can_split,
+        ));
+    }
+
+    fn collect_relevant_quadrants_for_query(
+        to_process: &mut NodeList,
+        depth: u8,
+        first_child_id: u32,
+        quadrants: Quadrants,
+        split_quadrants: &[CenteredAABB; 5],
+    ) {
+        let child_depth = depth + 1;
+
+        for offset in (1..=4).rev() {
+            if quadrants.at(offset) {
                 to_process.push_back(NodeData::new(
-                    mx,
-                    my,
-                    hx,
-                    hy,
-                    first_child_id + 4,
-                    nd.depth + 1,
-                    true,
-                ));
-            }
-            if quadrants.bottom_left {
-                to_process.push_back(NodeData::new(
-                    l,
-                    my,
-                    hx,
-                    hy,
-                    first_child_id + 3,
-                    nd.depth + 1,
-                    true,
-                ));
-            }
-            if quadrants.top_right {
-                to_process.push_back(NodeData::new(
-                    mx,
-                    t,
-                    hx,
-                    hy,
-                    first_child_id + 2,
-                    nd.depth + 1,
-                    true,
-                ));
-            }
-            if quadrants.top_left {
-                to_process.push_back(NodeData::new(
-                    l,
-                    t,
-                    hx,
-                    hy,
-                    first_child_id + 1,
-                    nd.depth + 1,
+                    split_quadrants[offset as usize],
+                    first_child_id + offset as u32,
+                    child_depth,
                     true,
                 ));
             }
         }
 
         // In intersection tests we always need to explore the self node.
-        let collect_self = quadrants.this | is_query;
-        if collect_self {
-            to_process.push_back(NodeData::new(
-                l,
-                t,
-                hx << 1,
-                hy << 1,
-                first_child_id + 0,
-                // The "this" node is at the same depth and cannot split.
-                nd.depth + 0,
-                false,
-            ));
-        }
+        to_process.push_back(NodeData::new(
+            split_quadrants[0],
+            first_child_id + 0,
+            // The "this" node is at the same depth and cannot split.
+            depth,
+            false,
+        ));
     }
 
     /// Prunes unused child nodes from the tree.
