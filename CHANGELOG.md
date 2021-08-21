@@ -8,6 +8,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Added opt-out support for [hashbrown](https://crates.io/crates/hashbrown).
+- Added `QuadTree::intersect_aabb_fn()` and `QuadTree::intersect_generic_fn()` functions
+  that execute a user-defined callback function for every intersected (candidate) item.
 
 ## 0.3.0 - 2021-08-21
 

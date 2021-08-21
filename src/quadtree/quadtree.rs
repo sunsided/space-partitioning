@@ -576,14 +576,36 @@ where
     pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
         let root = self.get_root_node_data();
         let leaves = self.find_leaves_aabb(root, rect);
-        self.intersect_from_leaves(rect, leaves)
+        let capacity = leaves.len() * self.max_num_elements as usize;
+        let mut node_set = HashSet::with_capacity(capacity);
+        self.intersect_from_leaves(rect, leaves, |id| {
+            node_set.insert(id);
+        });
+        node_set
+    }
+
+    /// Calls a function for each ID that occupies space within the
+    /// specified bounding box. The function may be called multiple
+    /// times for the same ID.
+    ///
+    /// # Arguments
+    /// * [`rect`] - The rectangle to test for.
+    /// * [`candidate_fn`] - The function called for each candidate element's ID.
+    #[inline]
+    pub fn intersect_aabb_fn<F>(&self, rect: &AABB, candidate_fn: F)
+    where
+        F: FnMut(ElementId),
+    {
+        let root = self.get_root_node_data();
+        let leaves = self.find_leaves_aabb(root, rect);
+        self.intersect_from_leaves(rect, leaves, candidate_fn);
     }
 
     /// Returns the set of IDs that occupy space within the
     /// specified bounding box.
     ///
     /// # Arguments
-    /// * [`rect`] - The rectangle to test for.
+    /// * [`element`] - The element to test for.
     #[inline]
     pub fn intersect_generic<T>(&self, element: &T) -> HashSet<ElementId>
     where
@@ -591,16 +613,37 @@ where
     {
         let root = self.get_root_node_data();
         let leaves = self.find_leaves_generic(root, element);
-        self.intersect_from_leaves(element, leaves)
-    }
-
-    fn intersect_from_leaves<T>(&self, rect: &T, mut leaves: NodeList) -> HashSet<ElementId>
-    where
-        T: IntersectsWith<AABB>,
-    {
         let capacity = leaves.len() * self.max_num_elements as usize;
         let mut node_set = HashSet::with_capacity(capacity);
+        self.intersect_from_leaves(element, leaves, |id| {
+            node_set.insert(id);
+        });
+        node_set
+    }
 
+    /// Calls a function for each ID that occupies space within the
+    /// specified bounding box. The function may be called multiple
+    /// times for the same ID.
+    ///
+    /// # Arguments
+    /// * [`element`] - The element to test for.
+    /// * [`candidate_fn`] - The function called for each candidate element's ID.
+    #[inline]
+    pub fn intersect_generic_fn<T, F>(&self, element: &T, candidate_fn: F)
+    where
+        T: IntersectsWith<AABB>,
+        F: FnMut(ElementId),
+    {
+        let root = self.get_root_node_data();
+        let leaves = self.find_leaves_generic(root, element);
+        self.intersect_from_leaves(element, leaves, candidate_fn);
+    }
+
+    fn intersect_from_leaves<T, F>(&self, rect: &T, mut leaves: NodeList, mut candidate_fn: F)
+    where
+        T: IntersectsWith<AABB>,
+        F: FnMut(ElementId),
+    {
         while !leaves.is_empty() {
             let leaf_data = leaves.pop_back();
             let leaf = self.nodes[leaf_data.index as usize];
@@ -615,14 +658,12 @@ where
                 // might still not be covered by the search rectangle.
                 if rect.intersects_with(&elem_rect) {
                     let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
-                    let _was_known = node_set.insert(elem_id);
+                    candidate_fn(elem_id);
                 }
 
                 elem_node_idx = elem_node.next;
             }
         }
-
-        node_set
     }
 
     /// Collects all element IDs stored in the tree by visiting all cells.
