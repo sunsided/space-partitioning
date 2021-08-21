@@ -31,6 +31,16 @@ fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
+    c.bench_function("visit_leaves tree(w=256, h=256, depth=8)", |b| {
+        let mut rng = thread_rng();
+        let tree = build_random_tree(&mut rng, 1024, 256, 256, 4);
+        b.iter(|| {
+            let mut vec = Vec::new();
+            tree.visit_leaves(|x| vec.push(x));
+            vec
+        })
+    });
+
     c.bench_function("intersect_aabb tree(n=1024, w=256, h=256, depth=4)", |b| {
         let mut rng = thread_rng();
         let tree = build_random_tree(&mut rng, 1024, 256, 256, 4);
