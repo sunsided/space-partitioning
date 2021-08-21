@@ -128,39 +128,37 @@ fn main() {
             items_under_ray = intersect_with_ray(&mut tree, &ray);
         }
 
-        if let Some(args) = e.render_args() {
-            window.draw_2d(&e, |c, g, _| {
-                clear([1.0; 4], g);
+        window.draw_2d(&e, |c, g, _| {
+            clear([1.0; 4], g);
 
-                {
-                    // Move to window center.
-                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
-                    let c = c.trans(half_window_size[0], half_window_size[1]);
+            let half_window_size = [window_size[0] * 0.5, window_size[1] * 0.5];
 
-                    render_tree_nodes(&tree, g, &c);
-                    render_disks(&items, g, &c, &items_under_mouse, &items_under_ray);
-                }
+            {
+                // Move to window center.
+                let c = c.trans(half_window_size[0], half_window_size[1]);
 
-                // Render the mouse cursor.
-                let rect = [
-                    mouse.pos[0] - CURSOR_SIZE * 0.5,
-                    mouse.pos[1] - CURSOR_SIZE * 0.5,
-                    CURSOR_SIZE,
-                    CURSOR_SIZE,
-                ];
-                rectangle(MOUSE, rect, c.transform, g);
-                Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
+                render_tree_nodes(&tree, g, &c);
+                render_disks(&items, g, &c, &items_under_mouse, &items_under_ray);
+            }
 
-                {
-                    // Move to window center.
-                    let half_window_size = [args.window_size[0] * 0.5, args.window_size[1] * 0.5];
-                    let c = c.trans(half_window_size[0], half_window_size[1]);
+            // Render the mouse cursor.
+            let rect = [
+                mouse.pos[0] - CURSOR_SIZE * 0.5,
+                mouse.pos[1] - CURSOR_SIZE * 0.5,
+                CURSOR_SIZE,
+                CURSOR_SIZE,
+            ];
+            rectangle(MOUSE, rect, c.transform, g);
+            Rectangle::new_border(BLACK, 1.0).draw(rect, &c.draw_state, c.transform, g);
 
-                    // Draw the ray
-                    render_ray(&ray, g, c);
-                }
-            });
-        }
+            {
+                // Move to window center.
+                let c = c.trans(half_window_size[0], half_window_size[1]);
+
+                // Draw the ray
+                render_ray(&ray, g, c);
+            }
+        });
     }
 }
 
