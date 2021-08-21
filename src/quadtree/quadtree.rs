@@ -481,34 +481,14 @@ where
         quadrants: Quadrants,
         split_quadrants: &[CenteredAABB; 5],
     ) {
-        debug_assert!(
-            quadrants.this()
-                ^ quadrants.top_left()
-                ^ quadrants.top_right()
-                ^ quadrants.bottom_left()
-                ^ quadrants.bottom_right()
-        );
-
-        let offset = if quadrants.this() {
-            0
-        } else if quadrants.top_left() {
-            1
-        } else if quadrants.top_right() {
-            2
-        } else if quadrants.bottom_left() {
-            3
-        } else {
-            4
-        };
+        let offset = quadrants.mutation_index();
+        debug_assert!(offset <= 4);
 
         // The "this" node at offset 0 cannot be split.
         let can_split = offset > 0;
 
         // The child depth only increases for the non-"this" node.
-        let mut child_depth = depth + 1;
-        if offset == 0 {
-            child_depth = 0;
-        }
+        let child_depth = depth + (1 - quadrants.this() as u8);
 
         to_process.push_back(NodeData::new(
             split_quadrants[offset as usize],
@@ -528,9 +508,9 @@ where
         let child_depth = depth + 1;
 
         for offset in (1..=4).rev() {
-            if quadrants[offset] {
+            if quadrants.at(offset) {
                 to_process.push_back(NodeData::new(
-                    split_quadrants[offset],
+                    split_quadrants[offset as usize],
                     first_child_id + offset as u32,
                     child_depth,
                     true,
