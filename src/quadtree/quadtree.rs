@@ -11,7 +11,6 @@ use crate::quadtree::quad_rect::QuadRect;
 use crate::quadtree::quadrants::Quadrants;
 use crate::quadtree::quadtree_element::QuadTreeElementNode;
 pub use crate::quadtree::quadtree_element::{ElementIdType, QuadTreeElement};
-use crate::types::HashSet;
 use smallvec::SmallVec;
 
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
@@ -112,9 +111,14 @@ where
 
             // Find the leaves
             let mut leaves = NodeList::default(); // TODO: extract / pool?
-            self.find_leaves_aabb_fn(node_data, element_coords, FindLeafHint::Mutate, |nd| {
-                leaves.push_back(nd);
-            });
+            self.find_leaves_aabb_fn(
+                node_data,
+                element_coords,
+                FindLeafHint::Mutate,
+                |_rect, nd| {
+                    leaves.push_back(nd);
+                },
+            );
 
             // TODO: Execute in the callback
             while !leaves.is_empty() {
@@ -280,7 +284,7 @@ where
         let mut found_element_idx = free_list::SENTINEL;
 
         let mut leaves = NodeList::default(); // TODO: extract / pool?
-        self.find_leaves_aabb_fn(root, element_coords, FindLeafHint::Mutate, |nd| {
+        self.find_leaves_aabb_fn(root, element_coords, FindLeafHint::Mutate, |_rect, nd| {
             leaves.push_back(nd);
         });
 
@@ -375,7 +379,7 @@ where
         hint: FindLeafHint,
         mut callback: F,
     ) where
-        F: FnMut(NodeData),
+        F: FnMut(&AABB, NodeData),
     {
         let mut to_process = NodeList::default();
         to_process.push_back(root);
@@ -385,7 +389,7 @@ where
 
             // If this node is a leaf, insert it to the list.
             if self.nodes[nd.index as usize].is_leaf() {
-                callback(nd);
+                callback(rect, nd);
                 continue;
             }
 
@@ -637,18 +641,16 @@ where
     /// # Arguments
     /// * [`rect`] - The rectangle to test for.
     #[inline]
-    pub fn intersect_aabb(&self, rect: &AABB) -> HashSet<ElementId> {
+    pub fn intersect_aabb(&self, rect: &AABB) -> Vec<ElementId> {
         let root = self.get_root_node_data();
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
-        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, |nd| {
-            leaves.push_back(nd);
+        let mut node_set = Vec::with_capacity(128);
+
+        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, |rect, nd| {
+            self.intersect_from_leaf(rect, nd, &mut |id| {
+                node_set.push(id);
+            });
         });
 
-        let capacity = leaves.len() * self.max_num_elements as usize;
-        let mut node_set = HashSet::with_capacity(capacity);
-        self.intersect_from_leaves(rect, leaves, |id| {
-            node_set.insert(id);
-        });
         node_set
     }
 
@@ -660,16 +662,16 @@ where
     /// * [`rect`] - The rectangle to test for.
     /// * [`candidate_fn`] - The function called for each candidate element's ID.
     #[inline]
-    pub fn intersect_aabb_fn<F>(&self, rect: &AABB, candidate_fn: F)
+    pub fn intersect_aabb_fn<F>(&self, rect: &AABB, mut candidate_fn: F)
     where
         F: FnMut(ElementId),
     {
         let root = self.get_root_node_data();
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
-        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, |nd| {
-            leaves.push_back(nd);
+        self.find_leaves_aabb_fn(root, rect, FindLeafHint::Query, move |rect, nd| {
+            self.intersect_from_leaf(rect, nd, &mut |id| {
+                candidate_fn(id);
+            });
         });
-        self.intersect_from_leaves(rect, leaves, candidate_fn);
     }
 
     /// Returns the set of IDs that occupy space within the
@@ -678,21 +680,20 @@ where
     /// # Arguments
     /// * [`element`] - The element to test for.
     #[inline]
-    pub fn intersect_generic<T>(&self, element: &T) -> HashSet<ElementId>
+    pub fn intersect_generic<T>(&self, element: &T) -> Vec<ElementId>
     where
         T: IntersectsWith<AABB>,
     {
         let root = self.get_root_node_data();
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
+        let mut node_set = Vec::with_capacity(128);
+
         self.find_leaves_generic_fn(root, element, |nd| {
-            leaves.push_back(nd);
+            self.intersect_from_leaf(element, nd, &mut |id| {
+                node_set.push(id);
+            });
         });
 
-        let capacity = leaves.len() * self.max_num_elements as usize;
-        let mut node_set = HashSet::with_capacity(capacity);
-        self.intersect_from_leaves(element, leaves, |id| {
-            node_set.insert(id);
-        });
+        // TODO: Ensure no element occurs twice
         node_set
     }
 
@@ -704,49 +705,47 @@ where
     /// * [`element`] - The element to test for.
     /// * [`candidate_fn`] - The function called for each candidate element's ID.
     #[inline]
-    pub fn intersect_generic_fn<T, F>(&self, element: &T, candidate_fn: F)
+    pub fn intersect_generic_fn<T, F>(&self, element: &T, mut candidate_fn: F)
     where
         T: IntersectsWith<AABB>,
         F: FnMut(ElementId),
     {
         let root = self.get_root_node_data();
-        let mut leaves = NodeList::default(); // TODO: extract / pool?
-        self.find_leaves_generic_fn(root, element, |nd| {
-            leaves.push_back(nd);
+        self.find_leaves_generic_fn(root, element, move |nd| {
+            self.intersect_from_leaf(element, nd, &mut |id| {
+                candidate_fn(id);
+            });
         });
-        self.intersect_from_leaves(element, leaves, candidate_fn);
     }
 
-    fn intersect_from_leaves<T, F>(&self, rect: &T, mut leaves: NodeList, mut candidate_fn: F)
+    #[inline]
+    fn intersect_from_leaf<T, F>(&self, rect: &T, leaf_data: NodeData, mut candidate_fn: F)
     where
         T: IntersectsWith<AABB>,
         F: FnMut(ElementId),
     {
-        while !leaves.is_empty() {
-            let leaf_data = leaves.pop_back();
-            let leaf = self.nodes[leaf_data.index as usize];
-            debug_assert!(leaf.is_leaf());
+        let leaf = self.nodes[leaf_data.index as usize];
+        debug_assert!(leaf.is_leaf());
 
-            let mut elem_node_idx = leaf.first_child_or_element;
-            while elem_node_idx != free_list::SENTINEL {
-                let elem_node = unsafe { self.element_nodes.at(elem_node_idx) };
-                let elem_rect = unsafe { self.element_rects.at(elem_node.element_idx) };
+        let mut elem_node_idx = leaf.first_child_or_element;
+        while elem_node_idx != free_list::SENTINEL {
+            let elem_node = unsafe { self.element_nodes.at(elem_node_idx) };
+            let elem_rect = unsafe { self.element_rects.at(elem_node.element_idx) };
 
-                // Depending on the size of the quadrant, the candidate element
-                // might still not be covered by the search rectangle.
-                if rect.intersects_with(&elem_rect) {
-                    let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
-                    candidate_fn(elem_id);
-                }
-
-                elem_node_idx = elem_node.next;
+            // Depending on the size of the quadrant, the candidate element
+            // might still not be covered by the search rectangle.
+            if rect.intersects_with(&elem_rect) {
+                let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
+                candidate_fn(elem_id);
             }
+
+            elem_node_idx = elem_node.next;
         }
     }
 
     /// Collects all element IDs stored in the tree by visiting all cells.
     #[allow(dead_code)]
-    pub(crate) fn collect_ids(&self) -> HashSet<ElementId> {
+    pub(crate) fn collect_ids(&self) -> Vec<ElementId> {
         let aabb: AABB = self.root_rect.into();
         self.intersect_aabb(&aabb)
     }
