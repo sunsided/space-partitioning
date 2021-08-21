@@ -40,21 +40,8 @@ impl NodeFlags {
 
 impl NodeData {
     #[inline]
-    pub(crate) fn new(
-        l: i32,
-        t: i32,
-        hx: i32,
-        hy: i32,
-        index: u32,
-        depth: u8,
-        can_split: bool,
-    ) -> Self {
-        Self::new_from_centered_aabb(
-            index,
-            depth,
-            CenteredAABB::from_ltwh(l, t, hx, hy),
-            can_split,
-        )
+    pub(crate) fn new(crect: CenteredAABB, index: u32, depth: u8, can_split: bool) -> Self {
+        Self::new_from_centered_aabb(index, depth, crect, can_split)
     }
 
     #[inline]
@@ -66,7 +53,7 @@ impl NodeData {
     fn new_from_centered_aabb(index: u32, depth: u8, crect: CenteredAABB, can_split: bool) -> Self {
         Self {
             index,
-            crect,
+            crect: crect.clone(),
             depth,
             flags: NodeFlags::new(can_split),
         }

@@ -450,15 +450,12 @@ where
         quadrants: Quadrants,
         hint: FindLeafHint,
     ) {
-        let mx = nd.crect.center_x;
-        let my = nd.crect.center_y;
-        let hx = nd.crect.half_width;
-        let hy = nd.crect.half_height;
-
-        let l = nd.crect.left();
-        let t = nd.crect.top();
-
+        let child_depth = nd.depth + 1;
         let is_query = hint == FindLeafHint::Query;
+
+        // Opportunistically calculate the new child rects.
+        // With inlining in place the compiler should be able to simplify some calculations.
+        let [top_left, top_right, bottom_left, bottom_right] = nd.crect.split_quadrants();
 
         // Only collect child nodes if there was no self match
         // or if we are trying to intersect.
@@ -466,45 +463,33 @@ where
         if collect_children {
             if quadrants.bottom_right {
                 to_process.push_back(NodeData::new(
-                    mx,
-                    my,
-                    hx,
-                    hy,
+                    bottom_right,
                     first_child_id + 4,
-                    nd.depth + 1,
+                    child_depth,
                     true,
                 ));
             }
             if quadrants.bottom_left {
                 to_process.push_back(NodeData::new(
-                    l,
-                    my,
-                    hx,
-                    hy,
+                    bottom_left,
                     first_child_id + 3,
-                    nd.depth + 1,
+                    child_depth,
                     true,
                 ));
             }
             if quadrants.top_right {
                 to_process.push_back(NodeData::new(
-                    mx,
-                    t,
-                    hx,
-                    hy,
+                    top_right,
                     first_child_id + 2,
-                    nd.depth + 1,
+                    child_depth,
                     true,
                 ));
             }
             if quadrants.top_left {
                 to_process.push_back(NodeData::new(
-                    l,
-                    t,
-                    hx,
-                    hy,
+                    top_left,
                     first_child_id + 1,
-                    nd.depth + 1,
+                    child_depth,
                     true,
                 ));
             }
@@ -514,13 +499,10 @@ where
         let collect_self = quadrants.this | is_query;
         if collect_self {
             to_process.push_back(NodeData::new(
-                l,
-                t,
-                hx << 1,
-                hy << 1,
+                nd.crect,
                 first_child_id + 0,
                 // The "this" node is at the same depth and cannot split.
-                nd.depth + 0,
+                nd.depth,
                 false,
             ));
         }
