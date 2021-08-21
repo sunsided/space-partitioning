@@ -7,6 +7,7 @@ use space_partitioning::QuadTree;
 
 const TREE_DEPTH: u32 = 6;
 const MAX_NUM_ELEMENTS: u32 = 2;
+const NUM_STATIC_ELEMENTS: u32 = 64;
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
@@ -263,7 +264,7 @@ fn build_test_data() -> (QuadTree, Vec<Disk>) {
     items.push(item);
 
     // Build some static elements.
-    for i in 0..64 {
+    for i in 0..NUM_STATIC_ELEMENTS {
         let mut rng = rand::thread_rng();
         let item = Disk {
             id: (i + 1) as _,
