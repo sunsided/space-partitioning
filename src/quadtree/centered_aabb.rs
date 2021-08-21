@@ -67,7 +67,7 @@ impl CenteredAABB {
     }
 
     #[inline]
-    pub fn split_quadrants(&self) -> [CenteredAABB; 4] {
+    pub fn split_quadrants(&self) -> [CenteredAABB; 5] {
         let hx = self.half_width >> 1;
         let hy = self.half_height >> 1;
         let mx = self.center_x - hx;
@@ -103,7 +103,7 @@ impl CenteredAABB {
             half_height: hy,
         };
 
-        [top_left, top_right, bottom_left, bottom_right]
+        [self.clone(), top_left, top_right, bottom_left, bottom_right]
     }
 
     #[inline]
