@@ -10,8 +10,8 @@ use crate::quadtree::node_list::NodeList;
 use crate::quadtree::quad_rect::QuadRect;
 use crate::quadtree::quadrants::Quadrants;
 pub use crate::quadtree::quadtree_element::{ElementIdType, QuadTreeElement};
+use crate::types::HashSet;
 use smallvec::SmallVec;
-use std::collections::HashSet;
 
 // TODO: Add range query: Query using intersect_aabb() or intersect_generic()
 

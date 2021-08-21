@@ -2,8 +2,8 @@ use piston_window::*;
 use rand::Rng;
 use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{NodeInfo, QuadRect, QuadTreeElement, AABB};
+use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
-use std::collections::HashSet;
 
 const TREE_DEPTH: u32 = 6;
 const MAX_NUM_ELEMENTS: u32 = 2;

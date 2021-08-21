@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Added opt-out support for [hashbrown](https://crates.io/crates/hashbrown).
+
 ## 0.3.0 - 2021-08-21
 
 ### Changed
