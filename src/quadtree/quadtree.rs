@@ -369,7 +369,7 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_aabb(rect);
-            Self::collect_relevant_quadrants(&mut to_process, nd, fc, quadrants)
+            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants)
         }
 
         leaves
@@ -397,7 +397,7 @@ where
 
             // Otherwise push the children that intersect the rectangle.
             let quadrants = nd.crect.explore_quadrants_generic(element);
-            Self::collect_relevant_quadrants(&mut to_process, nd, fc, quadrants)
+            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, quadrants)
         }
 
         leaves
@@ -420,20 +420,20 @@ where
             }
 
             let fc = self.nodes[nd.index as usize].get_first_child_node_index();
-            Self::collect_relevant_quadrants(&mut to_process, nd, fc, Quadrants::all())
+            Self::collect_relevant_quadrants(&mut to_process, &nd, fc, Quadrants::all())
         }
     }
 
     fn collect_relevant_quadrants(
         to_process: &mut NodeList,
-        nd: NodeData,
+        nd: &NodeData,
         first_child_id: u32,
         quadrants: Quadrants,
     ) {
         let mx = nd.crect.center_x;
         let my = nd.crect.center_y;
-        let hx = nd.crect.width >> 1;
-        let hy = nd.crect.height >> 1;
+        let hx = nd.crect.half_width;
+        let hy = nd.crect.half_height;
 
         let l = mx - hx;
         let t = my - hy;

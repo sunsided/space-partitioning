@@ -1,6 +1,6 @@
 use crate::intersections::IntersectsWith;
 use crate::quadtree::Point;
-use std::ops::Add;
+use std::ops::{Add, RangeInclusive};
 
 /// An axis-aligned bounding box defined by its edge coordinates.
 #[derive(Debug, PartialEq, Eq, Default, Copy, Clone)]
@@ -24,6 +24,14 @@ impl AABB {
         Self {
             tl: Point::new(x1, y1),
             br: Point::new(x2, y2),
+        }
+    }
+
+    #[inline]
+    pub fn from_ranges(x: RangeInclusive<i32>, y: RangeInclusive<i32>) -> Self {
+        Self {
+            tl: Point::new(*x.start(), *y.start()),
+            br: Point::new(*x.end(), *y.end()),
         }
     }
 }
@@ -56,7 +64,6 @@ impl IntersectsWith<AABB> for AABB {
         // block. With instruction pipelining, this could incur penalties from
         // branch mis-predictions however, so it might be better to just calculate
         // the test for degenerate cases anyway.
-
         // In the degenerate case we need a more relaxed test.
         let d_a = x1_max <= x2_min;
         let d_b = y1_max <= y2_min;

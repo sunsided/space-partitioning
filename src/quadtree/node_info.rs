@@ -21,6 +21,7 @@ impl NodeInfo {
         self.nd.depth
     }
 
+    #[inline]
     pub fn get_aabb(&self) -> AABB {
         self.nd.crect.get_aabb()
     }
