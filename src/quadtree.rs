@@ -126,7 +126,7 @@ mod test {
         // Erase the first-inserted node.
         assert!(tree.remove(&QuadTreeElement::new(1000, AABB::new(-15, -15, -5, -5))));
         assert_eq!(tree.collect_ids().len(), 5);
-        assert_eq!(tree.count_element_references(), 8);
+        assert_eq!(tree.count_element_references(), 5);
 
         // Since there are still populated child nodes, cleanup doesn't do anything.
         assert!(!tree.cleanup());

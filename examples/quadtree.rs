@@ -5,7 +5,7 @@ use space_partitioning::quadtree::{NodeInfo, QuadRect, QuadTreeElement, AABB};
 use space_partitioning::types::HashSet;
 use space_partitioning::QuadTree;
 
-const TREE_DEPTH: u32 = 6;
+const TREE_DEPTH: u8 = 6;
 const MAX_NUM_ELEMENTS: u32 = 2;
 const NUM_STATIC_ELEMENTS: u32 = 64;
 

@@ -30,9 +30,10 @@ impl Debug for Node {
             }
             (NODE_IS_BRANCH, child_index) => write!(
                 f,
-                "Branch, child nodes at {}..={}",
+                "Branch, child nodes at {}+{}..={}",
                 child_index,
-                child_index + 3
+                child_index + 1,
+                child_index + 4
             ),
             (0, free_list::SENTINEL) => write!(f, "Leaf, no elements"),
             (count, free_list::SENTINEL) => {

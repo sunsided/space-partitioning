@@ -4,6 +4,7 @@ use crate::quadtree::AABB;
 
 /// A centered axis-aligned bounding box.
 #[derive(Debug, Default)]
+#[repr(C, align(8))]
 pub struct CenteredAABB {
     /// The center X coordinate.
     pub center_x: i32,
@@ -37,13 +38,7 @@ impl CenteredAABB {
         let explore_bottom = other.br.y > self.center_y;
         let explore_left = other.tl.x <= self.center_x;
         let explore_right = other.br.x > self.center_x;
-
-        Quadrants {
-            top_left: explore_top & explore_left,
-            top_right: explore_top & explore_right,
-            bottom_left: explore_bottom & explore_left,
-            bottom_right: explore_bottom & explore_right,
-        }
+        Quadrants::from_tests(explore_left, explore_top, explore_right, explore_bottom)
     }
 
     // TODO: Prefer specialization, see https://github.com/rust-lang/rust/issues/31844
@@ -66,12 +61,12 @@ impl CenteredAABB {
         let bottom_left = AABB::from_ranges(l..=mx, my..=b);
         let bottom_right = AABB::from_ranges(mx..=r, my..=b);
 
-        Quadrants {
-            top_left: other.intersects_with(&top_left),
-            top_right: other.intersects_with(&top_right),
-            bottom_left: other.intersects_with(&bottom_left),
-            bottom_right: other.intersects_with(&bottom_right),
-        }
+        Quadrants::from_intersections(
+            other.intersects_with(&top_left),
+            other.intersects_with(&top_right),
+            other.intersects_with(&bottom_left),
+            other.intersects_with(&bottom_right),
+        )
     }
 
     #[inline]
