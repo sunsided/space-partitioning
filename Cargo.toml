@@ -2,7 +2,7 @@
 name = "space-partitioning"
 description = "Space partitioning data structures"
 version = "0.5.0"
-edition = "2018"
+edition = "2021"
 keywords = ["space-partitioning", "trees"]
 categories = ["computer-vision", "graphics", "game-development"]
 authors = ["Markus Mayer <widemeadows@gmail.com>"]
