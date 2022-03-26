@@ -3,6 +3,7 @@ use crate::rtree::extent::Extent;
 pub use num_traits::Num;
 use std::borrow::Borrow;
 use std::fmt::Debug;
+use std::mem::MaybeUninit;
 use std::ops::Range;
 
 /// An N-dimensional bounding box.
@@ -21,6 +22,38 @@ where
     pub dims: [Extent<T>; N],
 }
 
+impl<T, const N: usize> BoundingBox<T, N>
+where
+    T: DimensionType,
+{
+    /// Initializes a new box from the specified dimensions.
+    pub fn new(dims: [Extent<T>; N]) -> Self {
+        Self { dims }
+    }
+
+    /// Initializes a new box from the specified ranges.
+    pub fn new_from_ranges<R: Borrow<[Range<T>; N]>>(dims: R) -> Self {
+        let dims: &[Range<T>; N] = dims.borrow();
+
+        let mut data: [MaybeUninit<Extent<T>>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+        for i in 0..N {
+            data[i].write(Extent::from(&dims[i]));
+        }
+        // mem::transmute() doesn't work due to the generic T.
+        let data = unsafe { data.as_ptr().cast::<[Extent<T>; N]>().read() };
+
+        return BoundingBox::new(data);
+    }
+
+    /// Gets the number of dimensions of the bounding box.
+    ///
+    /// This value is a compile-time constant determined
+    /// by the generic parameter `N`.
+    pub fn len(self: &Self) -> usize {
+        return N;
+    }
+}
+
 impl<T, const N: usize> Default for BoundingBox<T, N>
 where
     T: DimensionType,
@@ -30,33 +63,10 @@ where
     }
 }
 
-impl<T, const N: usize> BoundingBox<T, N>
+impl<T, R, const N: usize> From<R> for BoundingBox<T, N>
 where
     T: DimensionType,
-{
-    pub fn new(dims: [Extent<T>; N]) -> Self {
-        Self { dims }
-    }
-
-    pub fn new_from_ranges<R: Borrow<[Range<T>; N]>>(dims: R) -> Self {
-        let dims = dims.borrow();
-        let mut data: [Extent<T>; N] = [Extent::default(); N];
-
-        for i in 0..N {
-            data[i] = Extent::from(&dims[i]);
-        }
-
-        Self { dims: data }
-    }
-
-    pub fn len(self: &Self) -> usize {
-        return N;
-    }
-}
-
-impl<const N: usize, T, R: Borrow<[Range<T>; N]>> From<R> for BoundingBox<T, N>
-where
-    T: DimensionType,
+    R: Borrow<[Range<T>; N]>,
 {
     fn from(dims: R) -> Self {
         Self::new_from_ranges(dims)
