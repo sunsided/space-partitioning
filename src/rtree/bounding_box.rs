@@ -1,5 +1,5 @@
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::extent::Extent;
+use crate::rtree::extent::{Contains, Extent};
 pub use num_traits::Num;
 use std::borrow::Borrow;
 use std::fmt::Debug;
@@ -49,8 +49,18 @@ where
     ///
     /// This value is a compile-time constant determined
     /// by the generic parameter `N`.
-    pub fn len(self: &Self) -> usize {
+    pub fn len(&self) -> usize {
         return N;
+    }
+
+    /// Tests whether this box fully contains another one.
+    pub fn contains(&self, other: &BoundingBox<T, N>) -> bool {
+        for i in 0..N {
+            if !self.dims[i].contains(other.dims[i]) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -109,5 +119,16 @@ pub mod test {
         assert_eq!(b.dims[0], Extent::default());
         assert_eq!(b.dims[1], Extent::default());
         assert_eq!(b.dims[2], Extent::default());
+    }
+
+    #[test]
+    fn contains_works() {
+        let a = BoundingBox::from([0.0..=1.0, 0.0..=1.0]);
+        let b = BoundingBox::from([0.25..=0.75, 0.0..=1.0]);
+        let c = BoundingBox::from([0.25..=0.75, 0.0..=1.5]);
+        let d = BoundingBox::from([-1.0..=1.0, 0.0..=1.0]);
+        assert!(a.contains(&b));
+        assert!(!a.contains(&c));
+        assert!(!a.contains(&d));
     }
 }
