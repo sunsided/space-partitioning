@@ -4,7 +4,7 @@ pub use num_traits::Num;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 /// An N-dimensional bounding box.
 ///
@@ -32,8 +32,8 @@ where
     }
 
     /// Initializes a new box from the specified ranges.
-    pub fn new_from_ranges<R: Borrow<[Range<T>; N]>>(dims: R) -> Self {
-        let dims: &[Range<T>; N] = dims.borrow();
+    pub fn new_from_ranges<R: Borrow<[RangeInclusive<T>; N]>>(dims: R) -> Self {
+        let dims: &[RangeInclusive<T>; N] = dims.borrow();
 
         let mut data: [MaybeUninit<Extent<T>>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         for i in 0..N {
@@ -66,7 +66,7 @@ where
 impl<T, R, const N: usize> From<R> for BoundingBox<T, N>
 where
     T: DimensionType,
-    R: Borrow<[Range<T>; N]>,
+    R: Borrow<[RangeInclusive<T>; N]>,
 {
     fn from(dims: R) -> Self {
         Self::new_from_ranges(dims)
@@ -80,24 +80,24 @@ pub mod test {
     #[test]
     fn construction_works() {
         let b = BoundingBox {
-            dims: [Extent::from(0.0..1.0), Extent::from(1.0..2.0)],
+            dims: [Extent::from(0.0..=1.0), Extent::from(1.0..=2.0)],
         };
         assert_eq!(b.len(), 2);
     }
 
     #[test]
     fn new_works() {
-        let b = BoundingBox::new([Extent::from(0.0..1.0), Extent::from(0.1..2.0)]);
+        let b = BoundingBox::new([Extent::from(0.0..=1.0), Extent::from(0.1..=2.0)]);
         assert_eq!(b.len(), 2);
-        assert_eq!(b.dims[0], (0.0..1.0).into());
-        assert_eq!(b.dims[1], (0.1..2.0).into());
+        assert_eq!(b.dims[0], (0.0..=1.0).into());
+        assert_eq!(b.dims[1], (0.1..=2.0).into());
     }
 
     #[test]
     fn new_from_ranges_works() {
-        let a = BoundingBox::from([0.0..1.0, 0.1..2.0]);
-        let b = BoundingBox::from(&[0.0..1.0, 0.1..2.0]);
-        let c = BoundingBox::new([Extent::from(0.0..1.0), Extent::from(0.1..2.0)]);
+        let a = BoundingBox::from([0.0..=1.0, 0.1..=2.0]);
+        let b = BoundingBox::from(&[0.0..=1.0, 0.1..=2.0]);
+        let c = BoundingBox::new([Extent::from(0.0..=1.0), Extent::from(0.1..=2.0)]);
         assert_eq!(a, b);
         assert_eq!(a, c);
     }

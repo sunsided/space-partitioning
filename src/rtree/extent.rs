@@ -1,7 +1,7 @@
 use crate::rtree::dimension_type::DimensionType;
 use std::borrow::Borrow;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 /// Extents along a dimension.
 #[derive(Copy, Clone, PartialEq)]
@@ -34,12 +34,12 @@ where
     /// ## Arguments
     /// * `start` - The start coordinate along the dimension.
     /// * `end` - The end coordinate along the dimension.
-    pub fn new_from_range<R: Borrow<Range<T>>>(range: R) -> Self {
+    pub fn new_from_range<R: Borrow<RangeInclusive<T>>>(range: R) -> Self {
         let range = range.borrow();
-        debug_assert!(range.start <= range.end);
+        debug_assert!(range.start() <= range.end());
         Self {
-            start: range.start,
-            end: range.end,
+            start: range.start().clone(),
+            end: range.end().clone(),
         }
     }
 }
@@ -56,7 +56,7 @@ where
     }
 }
 
-impl<T, R: Borrow<Range<T>>> From<R> for Extent<T>
+impl<T, R: Borrow<RangeInclusive<T>>> From<R> for Extent<T>
 where
     T: DimensionType,
 {
@@ -65,12 +65,12 @@ where
     }
 }
 
-impl<T> Into<Range<T>> for Extent<T>
+impl<T> Into<RangeInclusive<T>> for Extent<T>
 where
     T: DimensionType,
 {
-    fn into(self) -> Range<T> {
-        self.start..self.end
+    fn into(self) -> RangeInclusive<T> {
+        self.start..=self.end
     }
 }
 
@@ -106,6 +106,17 @@ where
             && value.start <= self.end
             && self.start <= value.end
             && value.end <= self.end
+    }
+}
+
+impl<T> Contains<RangeInclusive<T>> for Extent<T>
+where
+    T: DimensionType,
+{
+    fn contains(self, value: RangeInclusive<T>) -> bool {
+        let start = value.start();
+        let end = value.end();
+        &self.start <= start && start <= &self.end && &self.start <= end && end <= &self.end
     }
 }
 
@@ -147,21 +158,21 @@ pub mod test {
 
     #[test]
     fn new_from_range_works() {
-        let e = Extent::new_from_range(2.0..5.0);
+        let e = Extent::new_from_range(2.0..=5.0);
         assert_eq!(e.start, 2.0);
         assert_eq!(e.end, 5.0);
     }
 
     #[test]
     fn from_range_works() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert_eq!(e.start, 2.0);
         assert_eq!(e.end, 5.0);
     }
 
     #[test]
     fn from_range_ref_works() {
-        let r = 2.0..5.0;
+        let r = 2.0..=5.0;
         let e = Extent::from(&r);
         assert_eq!(e.start, 2.0);
         assert_eq!(e.end, 5.0);
@@ -169,27 +180,27 @@ pub mod test {
 
     #[test]
     fn into_range_works() {
-        let e = Extent::from(2.0..5.0);
-        let r: Range<f64> = e.into();
-        assert_eq!(r.start, 2.0);
-        assert_eq!(r.end, 5.0);
+        let e = Extent::from(2.0..=5.0);
+        let r: RangeInclusive<f64> = e.into();
+        assert_eq!(r.start(), &2.0);
+        assert_eq!(r.end(), &5.0);
     }
 
     #[test]
     fn extent_contains_start() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert!(e.contains(e.start));
     }
 
     #[test]
     fn extent_contains_end() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert!(e.contains(e.end));
     }
 
     #[test]
     fn contains_value_works() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert!(e.contains(2.5));
         assert!(!e.contains(0.0));
         assert!(!e.contains(5.1));
@@ -197,53 +208,53 @@ pub mod test {
 
     #[test]
     fn extent_contains_itself() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert!(e.contains(e));
     }
 
     #[test]
     fn extent_contains_itself_as_range() {
-        let e = Extent::from(2.0..5.0);
+        let e = Extent::from(2.0..=5.0);
         assert!(e.contains(2.0..5.0));
     }
 
     #[test]
     fn extent_contains_smaller_extent() {
-        let e = Extent::from(2.0..5.0);
-        assert!(e.contains(Extent::from(2.1..4.9)));
+        let e = Extent::from(2.0..=5.0);
+        assert!(e.contains(Extent::from(2.1..=4.9)));
     }
 
     #[test]
     fn extent_contains_smaller_range() {
-        let e = Extent::from(2.0..5.0);
-        assert!(e.contains(2.1..4.9));
+        let e = Extent::from(2.0..=5.0);
+        assert!(e.contains(2.1..=4.9));
     }
 
     #[test]
     fn extent_does_not_contain_overlaps() {
-        let e = Extent::from(2.0..5.0);
-        assert!(!e.contains(Extent::from(2.1..5.1)));
-        assert!(!e.contains(Extent::from(1.9..4.9)));
-        assert!(!e.contains(Extent::from(1.9..5.1)));
+        let e = Extent::from(2.0..=5.0);
+        assert!(!e.contains(Extent::from(2.1..=5.1)));
+        assert!(!e.contains(Extent::from(1.9..=4.9)));
+        assert!(!e.contains(Extent::from(1.9..=5.1)));
     }
 
     #[test]
     fn extent_does_not_contain_overlapping_rangers() {
-        let e = Extent::from(2.0..5.0);
-        assert!(!e.contains(2.1..5.1));
-        assert!(!e.contains(1.9..4.9));
-        assert!(!e.contains(1.9..5.1));
+        let e = Extent::from(2.0..=5.0);
+        assert!(!e.contains(2.1..=5.1));
+        assert!(!e.contains(1.9..=4.9));
+        assert!(!e.contains(1.9..=5.1));
     }
 
     #[test]
     fn display_works() {
-        assert_eq!(format!("{}", Extent::from(0.0..1.2)), "0..1.2");
-        assert_eq!(format!("{}", Extent::from(0..12)), "0..12");
+        assert_eq!(format!("{}", Extent::from(0.0..=1.2)), "0..1.2");
+        assert_eq!(format!("{}", Extent::from(0..=12)), "0..12");
     }
 
     #[test]
     fn debug_works() {
-        assert_eq!(format!("{:?}", Extent::from(0.0..1.2)), "0.0..1.2");
-        assert_eq!(format!("{:?}", Extent::from(0..12)), "0..12");
+        assert_eq!(format!("{:?}", Extent::from(0.0..=1.2)), "0.0..1.2");
+        assert_eq!(format!("{:?}", Extent::from(0..=12)), "0..12");
     }
 }
