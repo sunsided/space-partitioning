@@ -51,7 +51,7 @@ where
     fn default() -> Self {
         Self {
             start: T::zero(),
-            end: T::one(),
+            end: T::zero(),
         }
     }
 }
@@ -153,7 +153,7 @@ pub mod test {
     fn default_works() {
         let e: Extent<f64> = Extent::default();
         assert_eq!(e.start, 0.0);
-        assert_eq!(e.end, 1.0);
+        assert_eq!(e.end, 0.0);
     }
 
     #[test]
