@@ -42,6 +42,32 @@ where
             end: range.end().clone(),
         }
     }
+
+    /// Grows this extent to contain the other one.
+    #[inline]
+    pub fn grow<E: Borrow<Extent<T>>>(&mut self, other: E) {
+        let other = other.borrow();
+        self.start = min(self.start, other.start);
+        self.end = max(self.end, other.end);
+    }
+}
+
+#[inline]
+fn min<T: PartialOrd>(lhs: T, rhs: T) -> T {
+    if lhs <= rhs {
+        lhs
+    } else {
+        rhs
+    }
+}
+
+#[inline]
+fn max<T: PartialOrd>(lhs: T, rhs: T) -> T {
+    if lhs >= rhs {
+        lhs
+    } else {
+        rhs
+    }
 }
 
 impl<T> Default for Extent<T>
@@ -256,5 +282,20 @@ pub mod test {
     fn debug_works() {
         assert_eq!(format!("{:?}", Extent::from(0.0..=1.2)), "0.0..1.2");
         assert_eq!(format!("{:?}", Extent::from(0..=12)), "0..12");
+    }
+
+    #[test]
+    fn grow_works() {
+        let a = Extent::from(0.0..=1.2);
+        let b = Extent::from(0.0..=12.0);
+        let c = Extent::from(-1.0..=0.2);
+
+        let mut x = Extent::default();
+        x.grow(a);
+        x.grow(b);
+        x.grow(c);
+
+        assert_eq!(x.start, -1.0);
+        assert_eq!(x.end, 12.0);
     }
 }

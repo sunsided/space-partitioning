@@ -49,6 +49,7 @@ where
     ///
     /// This value is a compile-time constant determined
     /// by the generic parameter `N`.
+    #[inline]
     pub fn len(&self) -> usize {
         return N;
     }
@@ -61,6 +62,14 @@ where
             }
         }
         true
+    }
+
+    /// Grows this bounding box of this node to tightly fit all elements.
+    pub fn grow<B: Borrow<BoundingBox<T, N>>>(&mut self, other: B) {
+        let other = other.borrow();
+        for d in 0..N {
+            self.dims[d].grow(&other.dims[d]);
+        }
     }
 }
 
@@ -93,6 +102,15 @@ pub mod test {
             dims: [Extent::from(0.0..=1.0), Extent::from(1.0..=2.0)],
         };
         assert_eq!(b.len(), 2);
+    }
+
+    #[test]
+    fn default_is_empty() {
+        let b: BoundingBox<f64, 3> = BoundingBox::default();
+        for dim in b.dims {
+            assert_eq!(dim.start, 0.0);
+            assert_eq!(dim.end, 0.0);
+        }
     }
 
     #[test]
@@ -130,5 +148,24 @@ pub mod test {
         assert!(a.contains(&b));
         assert!(!a.contains(&c));
         assert!(!a.contains(&d));
+    }
+
+    #[test]
+    fn grow_works() {
+        let a = BoundingBox::from([0.0..=1.0, 0.0..=1.0]);
+        let b = BoundingBox::from([0.25..=0.75, 0.0..=1.0]);
+        let c = BoundingBox::from([0.25..=0.75, 0.0..=1.5]);
+        let d = BoundingBox::from([-1.0..=1.0, 0.0..=1.0]);
+
+        let mut x = BoundingBox::default();
+        x.grow(a);
+        x.grow(b);
+        x.grow(c);
+        x.grow(d);
+
+        assert_eq!(x.dims[0].start, -1.0);
+        assert_eq!(x.dims[0].end, 1.0);
+        assert_eq!(x.dims[1].start, 0.0);
+        assert_eq!(x.dims[1].end, 1.5);
     }
 }
