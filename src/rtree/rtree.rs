@@ -69,9 +69,16 @@ where
             }
         }
 
-        // Rebind the leaf variable without the options type.
+        // Rebind the leaf variable without the options wrapper.
         let leaf = leaf.unwrap();
-        todo!()
+
+        let mut leaf = leaf.deref().borrow_mut();
+        if !leaf.is_full() {
+            leaf.bb.grow(bb.clone());
+            leaf.entries.push(Entry { id, bb });
+        }
+
+        todo!();
 
         // Citing https://iq.opengenus.org/r-tree/
         //
@@ -153,43 +160,6 @@ where
                     todo!()
                 }
             }
-
-            /*
-
-            match &mut *current_node {
-                NodeChildEntry::NonLeaf(node) => {
-                    // Descend into the node that fully contains the object's region.
-                    'next_child: for c in 0..node.children.len() {
-                        // TODO: If multiple child nodes contain the object fully, pick the one of the smallest area
-                        let child = node.children[c];
-                        if !child.contains(bb) {
-                            continue 'next_child;
-                        }
-
-                        current_node_ptr = &mut node.children[c];
-                        parents.push(current_node_ptr);
-                        continue 'recurse;
-                    }
-
-                    // At this point, none of the child nodes contained the object's region.
-                    // We now need to find pick a node to add the entry to by selecting the
-                    // bounding box that grows the least in order to support the addition.
-                    debug_assert!(node.children.len() > 0);
-                    let child_idx = Self::find_child_of_smallest_size_increase(node, &bb);
-
-                    // Enlarge the node such that it fully contains the object to be inserted.
-                    node.children[child_idx].grow(bb);
-
-                    // Recurse down into the selected child node.
-                    current_node_ptr = &mut node.children[child_idx];
-                    parents.push(current_node_ptr);
-                    continue 'recurse;
-                }
-                NodeChildEntry::Leaf(node) => {
-                    return node;
-                }
-            }
-             */
         }
 
         unreachable!()
