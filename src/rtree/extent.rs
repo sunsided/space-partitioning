@@ -50,6 +50,12 @@ where
         self.start = min(self.start, other.start);
         self.end = max(self.end, other.end);
     }
+
+    /// Gets the length of the extent.
+    #[inline]
+    pub fn len(&self) -> T {
+        self.end - self.start
+    }
 }
 
 #[inline]
@@ -74,6 +80,7 @@ impl<T> Default for Extent<T>
 where
     T: DimensionType,
 {
+    #[inline]
     fn default() -> Self {
         Self {
             start: T::zero(),
@@ -108,6 +115,7 @@ impl<T> Contains<T> for Extent<T>
 where
     T: DimensionType,
 {
+    #[inline]
     fn contains(self, value: T) -> bool {
         self.start <= value && value <= self.end
     }
@@ -117,6 +125,7 @@ impl<T> Contains<Extent<T>> for Extent<T>
 where
     T: DimensionType,
 {
+    #[inline]
     fn contains(self, value: Extent<T>) -> bool {
         // Since we require that start <= end, we only need to test the boundaries.
         self.start <= value.start && value.end <= self.end

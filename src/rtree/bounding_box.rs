@@ -71,6 +71,43 @@ where
             self.dims[d].grow(&other.dims[d]);
         }
     }
+
+    /// Calculates the area of the box.
+    pub fn area(&self) -> T {
+        let mut area = T::one();
+        for d in 0..N {
+            area = area * self.dims[d].len()
+        }
+        area
+    }
+
+    /// Grows this bounding box of this node to tightly fit all elements.
+    pub fn get_grown<B: Borrow<BoundingBox<T, N>>>(&self, other: B) -> BoxAndArea<T, N> {
+        let other = other.borrow();
+        if self.contains(other) {
+            return BoxAndArea {
+                bb: self.clone(),
+                area: self.area(),
+            };
+        }
+
+        let mut new = self.clone();
+        let mut area = T::one();
+        for d in 0..N {
+            new.dims[d].grow(&other.dims[d]);
+            area = area * new.dims[d].len()
+        }
+        BoxAndArea { bb: new, area }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoxAndArea<T, const N: usize>
+where
+    T: DimensionType,
+{
+    pub bb: BoundingBox<T, N>,
+    pub area: T,
 }
 
 impl<T, const N: usize> Default for BoundingBox<T, N>
@@ -167,5 +204,20 @@ pub mod test {
         assert_eq!(x.dims[0].end, 1.0);
         assert_eq!(x.dims[1].start, 0.0);
         assert_eq!(x.dims[1].end, 1.5);
+    }
+
+    #[test]
+    fn get_grown_works() {
+        let a = BoundingBox::from([0.0..=1.0, 0.0..=1.0]);
+        let b = BoundingBox::from([0.5..=1.5, 0.5..=1.5]);
+
+        let x = a.get_grown(b);
+
+        assert_eq!(x.bb.dims[0].start, 0.0);
+        assert_eq!(x.bb.dims[0].end, 1.5);
+        assert_eq!(x.bb.dims[1].start, 0.0);
+        assert_eq!(x.bb.dims[1].end, 1.5);
+        assert_eq!(x.area, 1.5 * 1.5);
+        assert_eq!(x.bb.area(), x.area);
     }
 }

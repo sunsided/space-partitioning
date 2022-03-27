@@ -1,5 +1,9 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
+use std::borrow::{Borrow, BorrowMut};
+use std::cell::RefCell;
+use std::io::Read;
+use std::rc::Rc;
 
 /// The R-Tree
 ///
@@ -89,31 +93,41 @@ where
 {
     /// Inserts an element into the tree.
     pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
+        let child = self.choose_leaf(&bb);
+
+        /*
         let mut stack = vec![&mut self.root];
-        'recurse: while let Some(parent_node) = stack.pop() {
+        'recurse: while let Some(self_node) = stack.pop() {
             // TODO: Should probably keep the root node in here until all adjustments were made.
 
-            let parent_node: &mut NodeChildEntry<T, N, M> = &mut *parent_node;
-            match parent_node {
+            let self_node: &NodeChildEntry<T, N, M> = &self_node.into_inner();
+            match self_node {
                 NodeChildEntry::NonLeaf(node) => {
                     // Descend into the node that fully contains the object's region.
-                    for c in 0..node.children.len() {
+                    'next_child: for c in 0..node.children.len() {
                         // for mut child in node.children.iter_mut() {
                         let child = &node.children[c];
-                        if !child.contains(&bb) {
-                            continue;
+                        // TODO: Pick the node of the smallest area that fully contains the object?
+                        if !child.into_inner().contains(&bb) {
+                            continue 'next_child;
                         }
 
-                        // self.insert_recursive(entry, &mut child);
                         stack.push(&mut node.children[c]);
                         continue 'recurse;
-                        unreachable!()
                     }
 
                     // At this point, none of the child nodes contained the object's region.
                     // We now need to find pick a node to add the entry to by selecting the
                     // bounding box that grows the least in order to support the addition.
-                    // todo!()
+                    debug_assert!(node.children.len() > 0);
+
+                    let child_idx = Self::find_child_of_smallest_size_increase(node, &bb);
+                    let mut child = node.children[child_idx].into_inner();
+                    child.grow(&bb);
+
+                    // Recurse down into the selected child node.
+                    stack.push(&mut node.children[child_idx]);
+                    continue 'recurse;
                 }
                 NodeChildEntry::Leaf(node) => {
                     if node.contains(&bb) {
@@ -121,15 +135,25 @@ where
                         // bounding box of the node since it already fully contains the item.
                         node.entries.push(Entry { id, bb: bb.clone() });
                     } else {
-                        // Split node (this could change the current node into a non-leaf!)
+                        // When the tree is empty, the root node is a leaf with zero elements.
+                        if node.is_empty() {
+                            node.bb.grow(&bb);
+                            node.entries.push(Entry { id, bb: bb.clone() });
+                        } else {
+                            // Split node (this could change the current node into a non-leaf!)
+                            todo!()
+                        }
+
                         // Update parent's BB
                         // propagate adjustment / split upwards
+                        todo!()
                     }
 
-                    todo!()
+                    debug_assert!(!node.is_overfull()); // TODO ...
                 }
             }
         }
+         */
 
         // Citing https://iq.opengenus.org/r-tree/
         //
@@ -145,8 +169,30 @@ where
         //      whose children are the two resulting nodes.
     }
 
+    /// Find the child node that requires the smallest increase in area to contain
+    /// the new bounding box.
+    ///
+    /// ## Returns
+    /// The index of the child node that requires the smallest size increase.
+    fn find_child_of_smallest_size_increase(
+        node: &NonLeafNode<T, N, M>,
+        bb: &BoundingBox<T, N>,
+    ) -> usize {
+        let mut smallest_c = 0;
+        let mut smallest_bb = node.children[0].bb().get_grown(bb);
+
+        for c in 1..node.children.len() {
+            let adjusted_bb = node.children[c].bb().get_grown(bb);
+            if adjusted_bb.area < smallest_bb.area {
+                smallest_c = c;
+                smallest_bb = adjusted_bb;
+            }
+        }
+        smallest_c
+    }
+
     /// Select a leaf node in which to place a new entry.
-    fn choose_leaf(&mut self, _entry: &BoundingBox<T, N>) -> &mut LeafNode<T, N, M> {
+    fn choose_leaf(&mut self, bb: &BoundingBox<T, N>) -> &LeafNode<T, N, M> {
         // Citing https://iq.opengenus.org/r-tree/
         //
         // 1. Initialize: Set N to be the root node
@@ -157,7 +203,47 @@ where
         //      the rectangle of the smallest area.
         // 4. Descend until a leaf is reached.
         //      Set N to be the child node pointed to by Fp and repeat from step 2.
-        todo!()
+
+        let mut parents = vec![];
+        let mut current_node_ptr = &mut self.root;
+        'recurse: loop {
+            let current_node: &mut NodeChildEntry<T, N, M> = &mut current_node_ptr;
+            match &mut *current_node {
+                NodeChildEntry::NonLeaf(node) => {
+                    // Descend into the node that fully contains the object's region.
+                    'next_child: for c in 0..node.children.len() {
+                        // TODO: If multiple child nodes contain the object fully, pick the one of the smallest area
+                        let child = node.children[c];
+                        if !child.contains(bb) {
+                            continue 'next_child;
+                        }
+
+                        current_node_ptr = &mut node.children[c];
+                        parents.push(current_node_ptr);
+                        continue 'recurse;
+                    }
+
+                    // At this point, none of the child nodes contained the object's region.
+                    // We now need to find pick a node to add the entry to by selecting the
+                    // bounding box that grows the least in order to support the addition.
+                    debug_assert!(node.children.len() > 0);
+                    let child_idx = Self::find_child_of_smallest_size_increase(node, &bb);
+
+                    // Enlarge the node such that it fully contains the object to be inserted.
+                    node.children[child_idx].grow(bb);
+
+                    // Recurse down into the selected child node.
+                    current_node_ptr = &mut node.children[child_idx];
+                    parents.push(current_node_ptr);
+                    continue 'recurse;
+                }
+                NodeChildEntry::Leaf(node) => {
+                    return node;
+                }
+            }
+        }
+
+        unreachable!()
     }
 
     fn adjust_tree(&self) {
@@ -208,10 +294,18 @@ where
         self.entries.is_empty()
     }
 
-    /// Determines if this node has space for more elements.
+    /// Determines if this is full (including overfull).
     #[inline]
     pub fn is_full(&self) -> bool {
         self.len() >= Self::MAX_FILL
+    }
+
+    /// Determines if this node has more items than it is allowed to store.
+    /// This will not return `true` if the node has exactly the maximum number of
+    /// elements.
+    #[inline]
+    pub fn is_overfull(&self) -> bool {
+        self.len() > Self::MAX_FILL
     }
 
     /// Determines if this node has fewer elements than allowed.
@@ -262,7 +356,7 @@ where
     pub fn update_bounding_box(&mut self) {
         let mut new_box = BoundingBox::default();
         for entry in &self.children {
-            new_box.grow(entry.bb_ref());
+            new_box.grow(entry.bb());
         }
         self.bb = new_box;
     }
@@ -310,10 +404,19 @@ where
 
     /// Returns a reference to the bounding box of the element.
     #[inline]
-    fn bb_ref(&self) -> &BoundingBox<T, N> {
+    fn bb(&self) -> &BoundingBox<T, N> {
         match self {
             NodeChildEntry::Leaf(x) => &x.bb,
             NodeChildEntry::NonLeaf(x) => &x.bb,
+        }
+    }
+
+    /// Updates the bounding box of this node to tightly fit all elements and/or child nodes.
+    #[inline]
+    pub fn grow(&mut self, bb: &BoundingBox<T, N>) {
+        match self {
+            NodeChildEntry::Leaf(x) => x.bb.grow(bb),
+            NodeChildEntry::NonLeaf(x) => x.bb.grow(bb),
         }
     }
 }
