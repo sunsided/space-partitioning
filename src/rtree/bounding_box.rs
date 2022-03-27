@@ -88,6 +88,7 @@ where
             return BoxAndArea {
                 bb: self.clone(),
                 area: self.area(),
+                area_increase: T::zero(),
             };
         }
 
@@ -97,7 +98,11 @@ where
             new.dims[d].grow(&other.dims[d]);
             area = area * new.dims[d].len()
         }
-        BoxAndArea { bb: new, area }
+        BoxAndArea {
+            bb: new,
+            area,
+            area_increase: area - self.area(),
+        }
     }
 }
 
@@ -108,6 +113,7 @@ where
 {
     pub bb: BoundingBox<T, N>,
     pub area: T,
+    pub area_increase: T,
 }
 
 impl<T, const N: usize> Default for BoundingBox<T, N>
