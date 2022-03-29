@@ -1,10 +1,8 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::nodes::{ChildNodes, Entry, LeafNode, NonLeafNode};
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::{Cell, RefCell};
-use std::io::Read;
-use std::ops::{Deref, DerefMut};
+use crate::rtree::nodes::{ChildNodes, Entry, GetBoundingBox, LeafNode, NonLeafNode};
+use std::cell::RefCell;
+use std::ops::Deref;
 use std::rc::Rc;
 
 /// The R-Tree
@@ -44,33 +42,16 @@ where
 {
     /// Inserts an element into the tree.
     pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
-        let MatchingLeaf { mut leaf, parents } = self.choose_leaf(&bb);
+        let MatchingLeaf { leaf, parents } = self.choose_leaf(&bb);
 
         // Particularly if the tree is vanilla (e.g. default constructed)
         // there is no leaf node to choose. In this case, we attach a new leaf to the
         // deepest (and empty) non-leaf node; in case of the empty tree, this is the root.
         debug_assert_ne!(parents.len(), 0);
-        if leaf.is_none() {
-            let deepest_node = parents.last().unwrap();
-            let mut parent_ref = deepest_node.deref().borrow_mut();
-            let parent = parent_ref.deref_mut();
-            assert!(parent.children.is_empty());
-
-            let new_leaf = Rc::new(RefCell::new(LeafNode {
-                bb: BoundingBox::default(),
-                entries: vec![],
-            }));
-
-            leaf = Some(new_leaf.clone());
-
-            match &mut parent.children {
-                ChildNodes::Leaves(children) => children.push(new_leaf),
-                _ => panic!(),
-            }
-        }
-
-        // Rebind the leaf variable without the options wrapper.
-        let leaf = leaf.unwrap();
+        let leaf = match leaf {
+            Some(leaf) => leaf,
+            None => Self::add_leaf_to_empty_node(parents.last().unwrap()),
+        };
 
         let mut leaf = leaf.deref().borrow_mut();
         if !leaf.is_full() {
@@ -111,58 +92,90 @@ where
                         };
                     }
 
-                    let mut smallest_idx = usize::MAX;
-                    let mut smallest_area = T::max_value();
-                    let mut smallest_area_increase = T::max_value();
-                    for c in 0..leaves.len() {
-                        let leaf_ptr = leaves[c].clone();
-                        let leaf = leaf_ptr.deref().borrow();
-
-                        // If the bb is already fully contained by the leaf,
-                        // we ensure that we still pick the smallest leaf node.
-                        let grown = leaf.bb.get_grown(bb);
-
-                        // We keep the leaf that results in a smaller area increase
-                        // or, in case of a tie, with the smaller area.
-                        let is_smaller_increase = grown.area_increase < smallest_area_increase;
-                        let is_same_increase = grown.area_increase == smallest_area_increase;
-                        let is_smaller_area = grown.area < smallest_area;
-                        if is_smaller_increase || (is_same_increase && is_smaller_area) {
-                            smallest_idx = c;
-                            smallest_area = grown.area;
-                            smallest_area_increase = grown.area_increase;
-                        }
-                    }
-
-                    debug_assert_ne!(smallest_idx, usize::MAX);
-                    debug_assert_ne!(smallest_area, T::max_value());
+                    let smallest_idx = Self::find_best_fitting_child_of_smallest_area(bb, leaves);
                     return MatchingLeaf {
                         leaf: Some(leaves[smallest_idx].clone()),
                         parents,
                     };
                 }
                 ChildNodes::NonLeaves(non_leaves) => {
-                    for child in non_leaves {
-                        // Skip all child nodes that do not fully contain the bounding box.
-                        if !child.deref().borrow().contains(bb) {
-                            continue;
-                        }
+                    let smallest_idx =
+                        Self::find_best_fitting_child_of_smallest_area(bb, non_leaves);
+                    let next_node = non_leaves[smallest_idx].clone();
 
-                        // A node matched; recurse deeper.
-                        // TODO: If multiple child nodes contain the object fully, pick the one of the smallest area
-                        let next_node = child.clone();
-                        drop(node);
-                        current_node = next_node;
-                        continue 'recurse;
-                    }
+                    // Update this box's BB to fully contain the new object.
+                    next_node.deref().borrow_mut().bb.grow(bb);
 
-                    // TODO: If no node matched perfectly, find the one that matches best.
-                    todo!()
+                    drop(node);
+                    current_node = next_node;
+                    continue 'recurse;
                 }
             }
         }
+    }
 
-        unreachable!()
+    /// Adds a new leaf node to an empty non-leaf node.
+    ///
+    /// ## Arguments
+    /// * `parent` - The parent node. Must be empty.
+    ///
+    /// ## Returns
+    /// The new leaf node. This node is already registered as a child of the `parent`.
+    fn add_leaf_to_empty_node(
+        parent: &Rc<RefCell<NonLeafNode<T, N, M>>>,
+    ) -> Rc<RefCell<LeafNode<T, N, M>>> {
+        let mut parent = parent.deref().borrow_mut();
+        assert!(parent.children.is_empty());
+
+        let new_leaf = Rc::new(RefCell::new(LeafNode::default()));
+        parent.children.to_leaves_mut().push(new_leaf.clone());
+        new_leaf
+    }
+
+    /// Determines the child that either fully accepts the provided bounding
+    /// box or requires the least increase in size; if multiple options exist, picks
+    /// the first one of the smallest area.
+    ///
+    /// ## Arguments
+    /// * `bb` - The bounding box of the object to add.
+    /// * `leaves` - The vector of leaf node. Must not be empty.
+    ///
+    /// ## Returns
+    /// Returns the index of the optimal fit.
+    fn find_best_fitting_child_of_smallest_area<B>(
+        bb: &BoundingBox<T, N>,
+        leaves: &Vec<Rc<RefCell<B>>>,
+    ) -> usize
+    where
+        B: GetBoundingBox<T, N>,
+    {
+        debug_assert!(!leaves.is_empty());
+        let mut smallest_idx = usize::MAX;
+        let mut smallest_area = T::max_value();
+        let mut smallest_area_increase = T::max_value();
+
+        for c in 0..leaves.len() {
+            let leaf = leaves[c].deref().borrow();
+
+            // If the bb is already fully contained by the leaf,
+            // we ensure that we still pick the smallest leaf node.
+            let grown = leaf.bb().get_grown(bb);
+            let is_smaller_increase = grown.area_increase < smallest_area_increase;
+            let is_same_increase = grown.area_increase == smallest_area_increase;
+            let is_smaller_area = grown.area < smallest_area;
+
+            // We keep the leaf that results in a smaller area increase
+            // or, in case of a tie, with the smaller area.
+            if is_smaller_increase || (is_same_increase && is_smaller_area) {
+                smallest_idx = c;
+                smallest_area = grown.area;
+                smallest_area_increase = grown.area_increase;
+            }
+        }
+
+        debug_assert_ne!(smallest_idx, usize::MAX);
+        debug_assert_ne!(smallest_area, T::max_value());
+        smallest_idx
     }
 
     fn adjust_tree(&self) {

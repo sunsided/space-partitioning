@@ -28,11 +28,13 @@ where
 {
     /// Initializes a new box from the specified dimensions.
     pub fn new(dims: [Extent<T>; N]) -> Self {
+        debug_assert_ne!(N, 0);
         Self { dims }
     }
 
     /// Initializes a new box from the specified ranges.
     pub fn new_from_ranges<R: Borrow<[RangeInclusive<T>; N]>>(dims: R) -> Self {
+        debug_assert_ne!(N, 0);
         let dims: &[RangeInclusive<T>; N] = dims.borrow();
 
         let mut data: [MaybeUninit<Extent<T>>; N] = unsafe { MaybeUninit::uninit().assume_init() };
@@ -111,7 +113,7 @@ pub struct BoxAndArea<T, const N: usize>
 where
     T: DimensionType,
 {
-    pub bb: BoundingBox<T, N>,
+    bb: BoundingBox<T, N>,
     pub area: T,
     pub area_increase: T,
 }
@@ -121,6 +123,7 @@ where
     T: DimensionType,
 {
     fn default() -> Self {
+        debug_assert_ne!(N, 0);
         BoundingBox::new([Extent::default(); N])
     }
 }
@@ -224,6 +227,7 @@ pub mod test {
         assert_eq!(x.bb.dims[1].start, 0.0);
         assert_eq!(x.bb.dims[1].end, 1.5);
         assert_eq!(x.area, 1.5 * 1.5);
+        assert_eq!(x.area_increase, (1.5 * 1.5) - (1.0 * 1.0));
         assert_eq!(x.bb.area(), x.area);
     }
 }

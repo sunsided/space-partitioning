@@ -131,6 +131,21 @@ impl<T, const N: usize, const M: usize> ChildNodes<T, N, M>
 where
     T: DimensionType,
 {
+    /// Returns the value as a vector of leaf nodes.
+    ///
+    /// ## Panics
+    /// Panics if the value is not a vector of leaf nodes.
+    ///
+    /// ## Returns
+    /// A mutable reference to the embedded vector, cast to
+    /// leaf nodes.
+    pub fn to_leaves_mut(&mut self) -> &mut Vec<Rc<RefCell<LeafNode<T, N, M>>>> {
+        match self {
+            ChildNodes::Leaves(children) => children,
+            _ => panic!("children are not leaves"),
+        }
+    }
+
     /// Returns the number of child nodes of this child entry.
     #[inline]
     pub fn len(&self) -> usize {
@@ -146,6 +161,43 @@ where
         match &self {
             ChildNodes::Leaves(x) => x.is_empty(),
             ChildNodes::NonLeaves(x) => x.is_empty(),
+        }
+    }
+}
+
+pub(crate) trait GetBoundingBox<T, const N: usize>
+where
+    T: DimensionType,
+{
+    fn bb(&self) -> &BoundingBox<T, N>;
+}
+
+impl<T, const N: usize, const M: usize> GetBoundingBox<T, N> for LeafNode<T, N, M>
+where
+    T: DimensionType,
+{
+    fn bb(&self) -> &BoundingBox<T, N> {
+        &self.bb
+    }
+}
+
+impl<T, const N: usize, const M: usize> GetBoundingBox<T, N> for NonLeafNode<T, N, M>
+where
+    T: DimensionType,
+{
+    fn bb(&self) -> &BoundingBox<T, N> {
+        &self.bb
+    }
+}
+
+impl<T, const N: usize, const M: usize> Default for LeafNode<T, N, M>
+where
+    T: DimensionType,
+{
+    fn default() -> Self {
+        Self {
+            bb: BoundingBox::default(),
+            entries: vec![],
         }
     }
 }
