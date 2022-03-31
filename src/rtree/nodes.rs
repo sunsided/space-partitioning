@@ -115,7 +115,7 @@ where
 
     /// Inserts a new entry into this node, growing the bounding box.
     pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
-        debug_assert!(!self.is_full());
+        debug_assert!(!self.is_overfull());
         self.bb.grow(bb.clone());
         self.entries.push(Entry::new(id, bb));
     }
