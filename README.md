@@ -6,7 +6,7 @@ Space partitioning algorithms in Rust. A work in progress.
 
 ### QuadTrees
 
-Partitions 2D space into a tree of four segments each. Intersection tests are only
+Partitions 2D space into a tree of four non-overlapping segments each. Intersection tests are only
 implemented using axis-aligned bounding boxes. The tree is currently implemented using
 `i32` types only to speed up intersection tests; proper pre-scaling of floating-point data 
 is therefore required.
