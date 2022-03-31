@@ -113,7 +113,7 @@ pub struct BoxAndArea<T, const N: usize>
 where
     T: DimensionType,
 {
-    bb: BoundingBox<T, N>,
+    pub(crate) bb: BoundingBox<T, N>,
     pub area: T,
     pub area_increase: T,
 }

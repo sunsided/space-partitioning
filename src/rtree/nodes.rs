@@ -15,7 +15,7 @@ where
 
 /// An entry in a child node.
 /// This type stores the minimum bounding box of the object, as well as its ID.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Entry<T, const N: usize>
 where
     T: DimensionType,
@@ -47,6 +47,16 @@ where
     /// The minimum bounding box of all child nodes.
     pub bb: BoundingBox<T, N>,
     pub children: ChildNodes<T, N, M>,
+}
+
+impl<T, const N: usize> Entry<T, N>
+where
+    T: DimensionType,
+{
+    #[inline]
+    pub fn new(id: usize, bb: BoundingBox<T, N>) -> Self {
+        Self { id, bb }
+    }
 }
 
 impl<T, const N: usize, const M: usize> LeafNode<T, N, M>
@@ -101,6 +111,13 @@ where
             new_box.grow(&entry.bb);
         }
         self.bb = new_box;
+    }
+
+    /// Inserts a new entry into this node, growing the bounding box.
+    pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
+        debug_assert!(!self.is_full());
+        self.bb.grow(bb.clone());
+        self.entries.push(Entry::new(id, bb));
     }
 }
 
