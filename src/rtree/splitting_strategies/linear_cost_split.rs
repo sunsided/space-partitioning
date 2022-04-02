@@ -7,30 +7,31 @@ use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrat
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}
 
-impl<T, const N: usize> SplittingStrategy<T, Entry<T, N>, N> for LinearCostSplitting
+impl<T, TEntry, const N: usize> SplittingStrategy<T, TEntry, N> for LinearCostSplitting
 where
     T: DimensionType,
+    TEntry: GetBoundingBox<T, N>,
 {
     fn split(
         &self,
         area: &BoundingBox<T, N>,
-        entries: &mut Vec<Entry<T, N>>,
-    ) -> SplitResult<T, Entry<T, N>, N> {
+        entries: &mut Vec<TEntry>,
+    ) -> SplitResult<T, TEntry, N> {
         // Find the best candidates and pop them from the set in reverse order (highest index first).
         let (best_a, best_b) = linear_pick_seeds(&entries, &area);
         let best_b = entries.remove(best_b);
         let best_a = entries.remove(best_a);
 
-        let mut box_a = best_a.bb.clone();
-        let mut box_b = best_b.bb.clone();
+        let mut box_a = best_a.bb_ref().clone();
+        let mut box_b = best_b.bb_ref().clone();
 
         let mut group_a = vec![best_a];
         let mut group_b = vec![best_b];
 
         // TODO: If one group has so few entries that the rest must be assigned for it to have the minimum number of elements, assign the rest and stop.
         while let Some(item) = entries.pop() {
-            let a_grown = box_a.get_grown(&item.bb);
-            let b_grown = box_b.get_grown(&item.bb);
+            let a_grown = box_a.get_grown(item.bb_ref());
+            let b_grown = box_b.get_grown(item.bb_ref());
 
             match decide_group(&a_grown, &b_grown, group_a.len(), group_b.len()) {
                 Decision::Left => {
