@@ -21,6 +21,8 @@ where
     /// The root node. Default trees always start
     /// out with a leaf node that has zero elements.
     root: Rc<RefCell<NonLeafNode<T, N, M>>>,
+
+    split_strategy: LinearCostSplitting,
 }
 
 impl<T, const N: usize, const M: usize> Default for RTree<T, N, M>
@@ -34,6 +36,7 @@ where
         };
         Self {
             root: Rc::new(RefCell::new(root)),
+            split_strategy: LinearCostSplitting::default(),
         }
     }
 }
@@ -60,7 +63,7 @@ where
             leaf.insert(id, bb);
         } else {
             // Need to split the node here.
-            let _new_leaf = Self::split_leaf_node(&mut leaf);
+            let _new_leaf = self.split_leaf_node(&mut leaf);
 
             // TODO: Insert the new leaf into the parent node.
             // TODO: Might need to propagate the split upwards if the parent becomes overfull.
@@ -206,10 +209,10 @@ where
         todo!()
     }
 
-    fn split_leaf_node(leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
+    fn split_leaf_node(&self, leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
         // TODO: Make type parameter; bake into tree?
         let strategy = LinearCostSplitting {};
-        let SplitResult { first, second } = strategy.split(&leaf.bb, &mut leaf.entries);
+        let SplitResult { first, second } = self.split_strategy.split(&leaf.bb, &mut leaf.entries);
 
         leaf.bb = first.bb;
         leaf.entries = first.entries;
@@ -220,13 +223,10 @@ where
         }
     }
 
-    fn split_non_leaf_node(non_leaf: &mut NonLeafNode<T, N, M>) -> NonLeafNode<T, N, M> {
-        // TODO: Make type parameter; bake into tree?
-        let strategy = LinearCostSplitting {};
-
+    fn split_non_leaf_node(&self, non_leaf: &mut NonLeafNode<T, N, M>) -> NonLeafNode<T, N, M> {
         match &mut non_leaf.children {
             ChildNodes::Leaves(leaves) => {
-                let SplitResult { first, second } = strategy.split(&non_leaf.bb, leaves);
+                let SplitResult { first, second } = self.split_strategy.split(&non_leaf.bb, leaves);
                 debug_assert!(leaves.is_empty());
 
                 non_leaf.bb = first.bb;
@@ -238,7 +238,8 @@ where
                 }
             }
             ChildNodes::NonLeaves(non_leaves) => {
-                let SplitResult { first, second } = strategy.split(&non_leaf.bb, non_leaves);
+                let SplitResult { first, second } =
+                    self.split_strategy.split(&non_leaf.bb, non_leaves);
                 debug_assert!(non_leaves.is_empty());
 
                 non_leaf.bb = first.bb;
