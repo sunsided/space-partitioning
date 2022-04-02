@@ -110,7 +110,16 @@ impl<T, const N: usize, const M: usize> GetBoundingBox<T, N> for LeafNode<T, N, 
 where
     T: DimensionType,
 {
-    fn bb(&self) -> &BoundingBox<T, N> {
+    fn bb_ref(&self) -> &BoundingBox<T, N> {
+        &self.bb
+    }
+}
+
+impl<T, const N: usize> GetBoundingBox<T, N> for Entry<T, N>
+where
+    T: DimensionType,
+{
+    fn bb_ref(&self) -> &BoundingBox<T, N> {
         &self.bb
     }
 }

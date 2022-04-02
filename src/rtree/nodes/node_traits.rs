@@ -6,7 +6,7 @@ pub(crate) trait GetBoundingBox<T, const N: usize>
 where
     T: DimensionType,
 {
-    fn bb(&self) -> &BoundingBox<T, N>;
+    fn bb_ref(&self) -> &BoundingBox<T, N>;
 }
 
 pub(crate) trait Node<T, const N: usize>: GetBoundingBox<T, N>

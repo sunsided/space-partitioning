@@ -166,7 +166,7 @@ where
 
             // If the bb is already fully contained by the leaf,
             // we ensure that we still pick the smallest leaf node.
-            let grown = leaf.bb().get_grown(bb);
+            let grown = leaf.bb_ref().get_grown(bb);
             let is_smaller_increase = grown.area_increase < smallest_area_increase;
             let is_same_increase = grown.area_increase == smallest_area_increase;
             let is_smaller_area = grown.area < smallest_area;

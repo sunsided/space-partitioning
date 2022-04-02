@@ -8,10 +8,10 @@ pub(crate) mod prelude {
     pub(crate) use super::SplittingStrategy;
 }
 
-pub(crate) trait SplittingStrategy<T, const N: usize, const M: usize>
+pub(crate) trait SplittingStrategy<T, TNode, const N: usize>
 where
     T: DimensionType,
+    TNode: Node<T, N>,
 {
-    // TODO: Allow for NonLeafNode as well
-    fn split(&self, node: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M>;
+    fn split(&self, node: &mut TNode) -> TNode;
 }

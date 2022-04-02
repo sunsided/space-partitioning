@@ -41,7 +41,7 @@ impl<T, const N: usize, const M: usize> GetBoundingBox<T, N> for NonLeafNode<T, 
 where
     T: DimensionType,
 {
-    fn bb(&self) -> &BoundingBox<T, N> {
+    fn bb_ref(&self) -> &BoundingBox<T, N> {
         &self.bb
     }
 }

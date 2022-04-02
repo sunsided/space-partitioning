@@ -1,12 +1,14 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::leaf_node::{Entry, LeafNode};
+use crate::rtree::nodes::prelude::GetBoundingBox;
 use crate::rtree::splitting_strategies::SplittingStrategy;
 
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}
 
-impl<T, const N: usize, const M: usize> SplittingStrategy<T, N, M> for LinearCostSplitting
+impl<T, const N: usize, const M: usize> SplittingStrategy<T, LeafNode<T, N, M>, N>
+    for LinearCostSplitting
 where
     T: DimensionType,
 {
@@ -76,19 +78,30 @@ where
     }
 }
 
-fn linear_pick_seeds<T, const N: usize>(
-    set: &[Entry<T, N>],
+/// Picks two seed nodes from the provided entries and returns their indices.
+///
+/// ## Arguments
+/// * `entries` - The entries to choose from.
+/// * `area` - The minimal bounding box of all entries.
+///
+/// ## Returns
+/// A tuple of two distinct indexes.
+/// The entries are sorted in ascending order such that elements can be removed from
+/// a vector back to front.
+fn linear_pick_seeds<T, TEntry, const N: usize>(
+    entries: &[TEntry],
     area: &BoundingBox<T, N>,
 ) -> (usize, usize)
 where
     T: DimensionType,
+    TEntry: GetBoundingBox<T, N>,
 {
-    debug_assert!(set.len() > 1);
+    debug_assert!(entries.len() > 1);
     let mut highest_lows = vec![(T::min_value(), 0usize); N];
     let mut lowest_highs = vec![(T::max_value(), 0usize); N];
 
-    for item_idx in 0..set.len() {
-        let bb = &set[item_idx].bb;
+    for item_idx in 0..entries.len() {
+        let bb = entries[item_idx].bb_ref();
         for dim in 0..N {
             let extent = bb.dims[dim];
 
