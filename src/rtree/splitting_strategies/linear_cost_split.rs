@@ -1,21 +1,21 @@
-use crate::rtree::bounding_box::BoundingBox;
+use crate::rtree::bounding_box::{BoundingBox, BoxAndArea};
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::leaf_node::{Entry, LeafNode};
 use crate::rtree::nodes::prelude::GetBoundingBox;
-use crate::rtree::splitting_strategies::SplittingStrategy;
+use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrategy};
 
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}
 
-impl<T, const N: usize, const M: usize> SplittingStrategy<T, LeafNode<T, N, M>, N>
-    for LinearCostSplitting
+impl<T, const N: usize> SplittingStrategy<T, Entry<T, N>, N> for LinearCostSplitting
 where
     T: DimensionType,
 {
-    fn split(&self, node: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
-        let area = &node.bb;
-        let entries = &mut node.entries;
-
+    fn split(
+        &self,
+        area: &BoundingBox<T, N>,
+        entries: &mut Vec<Entry<T, N>>,
+    ) -> SplitResult<T, Entry<T, N>, N> {
         // Find the best candidates and pop them from the set in reverse order (highest index first).
         let (best_a, best_b) = linear_pick_seeds(&entries, &area);
         let best_b = entries.remove(best_b);
@@ -32,48 +32,27 @@ where
             let a_grown = box_a.get_grown(&item.bb);
             let b_grown = box_b.get_grown(&item.bb);
 
-            // Assign to the box requiring a smaller increase in size.
-            if a_grown.area_increase < b_grown.area_increase {
-                box_a = a_grown.bb;
-                group_a.push(item);
-                continue;
+            match decide_group(&a_grown, &b_grown, group_a.len(), group_b.len()) {
+                Decision::Left => {
+                    box_a = a_grown.bb;
+                    group_a.push(item);
+                }
+                Decision::Right => {
+                    box_b = b_grown.bb;
+                    group_b.push(item);
+                }
             }
-            if a_grown.area_increase > b_grown.area_increase {
-                box_b = b_grown.bb;
-                group_b.push(item);
-                continue;
-            }
-
-            // In case of a tie, assign to the smaller box.
-            if a_grown.area < b_grown.area {
-                box_a = a_grown.bb;
-                group_a.push(item);
-                continue;
-            }
-            if a_grown.area > b_grown.area {
-                box_b = b_grown.bb;
-                group_b.push(item);
-                continue;
-            }
-
-            // In case of a tie, assign to the box with fewer items,
-            // or any box.
-            if group_a.len() < group_b.len() {
-                box_a = a_grown.bb;
-                group_a.push(item);
-                continue;
-            }
-
-            box_b = b_grown.bb;
-            group_b.push(item);
         }
 
-        node.bb = box_a;
-        node.entries = group_a;
-
-        LeafNode {
-            bb: box_b,
-            entries: group_b,
+        SplitResult {
+            first: SplitGroup {
+                bb: box_a,
+                entries: group_a,
+            },
+            second: SplitGroup {
+                bb: box_b,
+                entries: group_b,
+            },
         }
     }
 }
@@ -148,6 +127,44 @@ where
     (low_idx, high_idx)
 }
 
+enum Decision {
+    Left,
+    Right,
+}
+
+fn decide_group<T: DimensionType, const N: usize>(
+    a: &BoxAndArea<T, N>,
+    b: &BoxAndArea<T, N>,
+    a_count: usize,
+    b_count: usize,
+) -> Decision {
+    // Assign to the box requiring a smaller increase in size.
+    if a.area_increase < b.area_increase {
+        return Decision::Left;
+    }
+
+    if a.area_increase > b.area_increase {
+        return Decision::Right;
+    }
+
+    // In case of a tie, assign to the smaller box.
+    if a.area < b.area {
+        return Decision::Left;
+    }
+
+    if a.area > b.area {
+        return Decision::Right;
+    }
+
+    // In case of a tie, assign to the box with fewer items,
+    // or any box.
+    if a_count < b_count {
+        return Decision::Left;
+    }
+
+    return Decision::Right;
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -161,14 +178,14 @@ mod test {
         old_node.insert(3, [82.0..=145.0, 30.0..=42.0].into());
 
         let strategy = LinearCostSplitting {};
-        let new_node = strategy.split(&mut old_node);
+        let result = strategy.split(&old_node.bb, &mut old_node.entries);
 
         // Group a contains both horizontal items.
-        debug_assert!(old_node.entries.iter().any(|x| x.id == 0));
-        debug_assert!(old_node.entries.iter().any(|x| x.id == 3));
+        debug_assert!(result.first.entries.iter().any(|x| x.id == 0));
+        debug_assert!(result.first.entries.iter().any(|x| x.id == 3));
 
         // Group a contains both vertical items.
-        debug_assert!(new_node.entries.iter().any(|x| x.id == 1));
-        debug_assert!(new_node.entries.iter().any(|x| x.id == 2));
+        debug_assert!(result.second.entries.iter().any(|x| x.id == 1));
+        debug_assert!(result.second.entries.iter().any(|x| x.id == 2));
     }
 }

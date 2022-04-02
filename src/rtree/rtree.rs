@@ -2,7 +2,7 @@ use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::prelude::*;
 use crate::rtree::splitting_strategies::linear_cost_split::LinearCostSplitting;
-use crate::rtree::splitting_strategies::SplittingStrategy;
+use crate::rtree::splitting_strategies::{SplitResult, SplittingStrategy};
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -60,7 +60,7 @@ where
             leaf.insert(id, bb);
         } else {
             // Need to split the node here.
-            let _new_leaf = Self::split_node(&mut leaf);
+            let _new_leaf = Self::split_leaf_node(&mut leaf);
 
             // TODO: Insert the new leaf into the parent node.
             // TODO: Might need to propagate the split upwards if the parent becomes overfull.
@@ -206,14 +206,18 @@ where
         todo!()
     }
 
-    fn split_node(leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
-        // - Exhaustive
-        // - Quadratic-Cost
-        // - Linear-Cost
-
-        // TODO: Make type parameter; bake into tree.
+    fn split_leaf_node(leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
+        // TODO: Make type parameter; bake into tree?
         let strategy = LinearCostSplitting {};
-        strategy.split(leaf)
+        let SplitResult { first, second } = strategy.split(&leaf.bb, &mut leaf.entries);
+
+        leaf.bb = first.bb;
+        leaf.entries = first.entries;
+
+        LeafNode {
+            bb: second.bb,
+            entries: second.entries,
+        }
     }
 }
 
