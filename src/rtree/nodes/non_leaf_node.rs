@@ -17,6 +17,28 @@ where
     pub children: ChildNodes<T, N, M>,
 }
 
+impl<T, const N: usize, const M: usize> NonLeafNode<T, N, M>
+where
+    T: DimensionType,
+{
+    pub const MAX_FILL: usize = M;
+    pub const MIN_FILL: usize = (M + 1) / 2;
+
+    /// Determines if this is full (including overfull).
+    #[inline]
+    pub fn is_full(&self) -> bool {
+        self.len() >= Self::MAX_FILL
+    }
+
+    /// Determines if this node has more items than it is allowed to store.
+    /// This will not return `true` if the node has exactly the maximum number of
+    /// elements.
+    #[inline]
+    pub fn is_overfull(&self) -> bool {
+        self.len() > Self::MAX_FILL
+    }
+}
+
 impl<T, const N: usize, const M: usize> Node<T, N> for NonLeafNode<T, N, M>
 where
     T: DimensionType,

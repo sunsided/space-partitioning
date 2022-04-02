@@ -79,10 +79,29 @@ where
     }
 
     /// Inserts a new entry into this node, growing the bounding box.
+    ///
+    /// ## Arguments
+    /// * `id` - The ID of the element to insert.
+    /// * `bb` - The minimum bounding box of the element to insert.
     pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
         debug_assert!(!self.is_overfull());
         self.bb.grow(bb.clone());
         self.entries.push(Entry::new(id, bb));
+    }
+
+    /// Inserts a new entry into this node, growing the bounding box.
+    ///
+    /// ## Arguments
+    /// * `id` - The ID of the element to insert.
+    /// * `bb` - The minimum bounding box of the element to insert.
+    ///
+    /// ## Returns
+    /// A `bool` indicating whether the insert was valid (`true`) or whether
+    /// the box is now overfull (`false`).
+    pub fn insert_unchecked(&mut self, id: usize, bb: BoundingBox<T, N>) -> bool {
+        self.bb.grow(bb.clone());
+        self.entries.push(Entry::new(id, bb));
+        !self.is_overfull()
     }
 }
 

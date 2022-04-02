@@ -59,14 +59,17 @@ where
         };
 
         let mut leaf = leaf.deref().borrow_mut();
-        if !leaf.is_full() {
-            leaf.insert(id, bb);
-        } else {
+        if !leaf.insert_unchecked(id, bb) {
             // Need to split the node here.
-            let _new_leaf = self.split_leaf_node(&mut leaf);
+            let new_leaf = self.split_leaf_node(&mut leaf);
 
-            // TODO: Insert the new leaf into the parent node.
+            // Insert the new leaf into the parent node.
+            let mut parent = parents.last().unwrap().deref().borrow_mut();
+            let entries = parent.children.to_leaves_mut();
+            entries.push(Rc::new(RefCell::new(new_leaf)));
+
             // TODO: Might need to propagate the split upwards if the parent becomes overfull.
+            debug_assert!(!parent.is_overfull());
             todo!();
         }
 
@@ -276,11 +279,24 @@ mod test {
     }
 
     #[test]
-    fn insert_works() {
+    fn simple_insert_works() {
         let mut tree = RTree::<f32, 2, 2>::default();
         tree.insert(0, BoundingBox::from([1.0..=2.0, 4.0..=17.0]));
         assert!(!tree.root.deref().borrow().is_empty());
         assert_eq!(tree.root.deref().borrow().len(), 1);
+        // TODO: The tree dimensions must now match the object's.
+    }
+
+    #[test]
+    fn insert_works() {
+        let mut tree = RTree::<f32, 2, 3>::default();
+        tree.insert(0, [16.0..=68.0, 23.0..=35.0].into());
+        tree.insert(1, [55.0..=68.0, 12.0..=148.0].into());
+        tree.insert(2, [82.0..=94.0, 12.0..=148.0].into());
+        tree.insert(3, [82.0..=145.0, 30.0..=42.0].into());
+
+        assert!(!tree.root.deref().borrow().is_empty());
+        assert_eq!(tree.root.deref().borrow().len(), 4);
         // TODO: The tree dimensions must now match the object's.
     }
 }

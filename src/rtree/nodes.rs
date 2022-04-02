@@ -46,6 +46,21 @@ where
         }
     }
 
+    /// Returns the value as a vector of non-leaf nodes.
+    ///
+    /// ## Panics
+    /// Panics if the value is not a vector of non-leaf nodes.
+    ///
+    /// ## Returns
+    /// A mutable reference to the embedded vector, cast to
+    /// non-leaf nodes.
+    pub fn to_non_leaves_mut(&mut self) -> &mut Vec<Rc<RefCell<NonLeafNode<T, N, M>>>> {
+        match self {
+            ChildNodes::NonLeaves(children) => children,
+            _ => panic!("children are not non-leaves"),
+        }
+    }
+
     /// Returns the number of child nodes of this child entry.
     #[inline]
     pub fn len(&self) -> usize {
