@@ -1,8 +1,11 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::nodes::node_traits::{GetBoundingBox, Node};
+use crate::rtree::nodes::node_traits::{AsBoundingBox, Node, ToBoundingBox};
 use crate::rtree::nodes::ChildNodes;
 use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::ops::Deref;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub(crate) struct NonLeafNode<T, const N: usize, const M: usize>
@@ -37,11 +40,20 @@ where
     }
 }
 
-impl<T, const N: usize, const M: usize> GetBoundingBox<T, N> for NonLeafNode<T, N, M>
+impl<T, const N: usize, const M: usize> AsBoundingBox<T, N> for NonLeafNode<T, N, M>
 where
     T: DimensionType,
 {
-    fn bb_ref(&self) -> &BoundingBox<T, N> {
+    fn as_bb(&self) -> &BoundingBox<T, N> {
         &self.bb
+    }
+}
+
+impl<T, const N: usize, const M: usize> ToBoundingBox<T, N> for Rc<RefCell<NonLeafNode<T, N, M>>>
+where
+    T: DimensionType,
+{
+    fn to_bb(&self) -> BoundingBox<T, N> {
+        self.deref().borrow().bb.clone()
     }
 }

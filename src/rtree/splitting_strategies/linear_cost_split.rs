@@ -1,7 +1,7 @@
 use crate::rtree::bounding_box::{BoundingBox, BoxAndArea};
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::nodes::leaf_node::{Entry, LeafNode};
-use crate::rtree::nodes::prelude::GetBoundingBox;
+use crate::rtree::nodes::leaf_node::LeafNode;
+use crate::rtree::nodes::node_traits::ToBoundingBox;
 use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrategy};
 
 #[derive(Debug, Default, Clone)]
@@ -10,7 +10,7 @@ pub struct LinearCostSplitting {}
 impl<T, TEntry, const N: usize> SplittingStrategy<T, TEntry, N> for LinearCostSplitting
 where
     T: DimensionType,
-    TEntry: GetBoundingBox<T, N>,
+    TEntry: ToBoundingBox<T, N>,
 {
     fn split(
         &self,
@@ -22,16 +22,16 @@ where
         let best_b = entries.remove(best_b);
         let best_a = entries.remove(best_a);
 
-        let mut box_a = best_a.bb_ref().clone();
-        let mut box_b = best_b.bb_ref().clone();
+        let mut box_a = best_a.to_bb();
+        let mut box_b = best_b.to_bb();
 
         let mut group_a = vec![best_a];
         let mut group_b = vec![best_b];
 
         // TODO: If one group has so few entries that the rest must be assigned for it to have the minimum number of elements, assign the rest and stop.
         while let Some(item) = entries.pop() {
-            let a_grown = box_a.get_grown(item.bb_ref());
-            let b_grown = box_b.get_grown(item.bb_ref());
+            let a_grown = box_a.get_grown(item.to_bb());
+            let b_grown = box_b.get_grown(item.to_bb());
 
             match decide_group(&a_grown, &b_grown, group_a.len(), group_b.len()) {
                 Decision::Left => {
@@ -74,14 +74,14 @@ fn linear_pick_seeds<T, TEntry, const N: usize>(
 ) -> (usize, usize)
 where
     T: DimensionType,
-    TEntry: GetBoundingBox<T, N>,
+    TEntry: ToBoundingBox<T, N>,
 {
     debug_assert!(entries.len() > 1);
     let mut highest_lows = vec![(T::min_value(), 0usize); N];
     let mut lowest_highs = vec![(T::max_value(), 0usize); N];
 
     for item_idx in 0..entries.len() {
-        let bb = entries[item_idx].bb_ref();
+        let bb = entries[item_idx].to_bb();
         for dim in 0..N {
             let extent = bb.dims[dim];
 

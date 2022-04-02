@@ -2,14 +2,21 @@ use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
 use std::borrow::Borrow;
 
-pub(crate) trait GetBoundingBox<T, const N: usize>
+pub(crate) trait AsBoundingBox<T, const N: usize>
 where
     T: DimensionType,
 {
-    fn bb_ref(&self) -> &BoundingBox<T, N>;
+    fn as_bb(&self) -> &BoundingBox<T, N>;
 }
 
-pub(crate) trait Node<T, const N: usize>: GetBoundingBox<T, N>
+pub(crate) trait ToBoundingBox<T, const N: usize>
+where
+    T: DimensionType,
+{
+    fn to_bb(&self) -> BoundingBox<T, N>;
+}
+
+pub(crate) trait Node<T, const N: usize>: AsBoundingBox<T, N>
 where
     T: DimensionType,
 {

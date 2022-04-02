@@ -154,7 +154,7 @@ where
         leaves: &Vec<Rc<RefCell<B>>>,
     ) -> usize
     where
-        B: GetBoundingBox<T, N>,
+        B: AsBoundingBox<T, N>,
     {
         debug_assert!(!leaves.is_empty());
         let mut smallest_idx = usize::MAX;
@@ -166,7 +166,7 @@ where
 
             // If the bb is already fully contained by the leaf,
             // we ensure that we still pick the smallest leaf node.
-            let grown = leaf.bb_ref().get_grown(bb);
+            let grown = leaf.as_bb().get_grown(bb);
             let is_smaller_increase = grown.area_increase < smallest_area_increase;
             let is_same_increase = grown.area_increase == smallest_area_increase;
             let is_smaller_area = grown.area < smallest_area;
@@ -217,6 +217,38 @@ where
         LeafNode {
             bb: second.bb,
             entries: second.entries,
+        }
+    }
+
+    fn split_non_leaf_node(non_leaf: &mut NonLeafNode<T, N, M>) -> NonLeafNode<T, N, M> {
+        // TODO: Make type parameter; bake into tree?
+        let strategy = LinearCostSplitting {};
+
+        match &mut non_leaf.children {
+            ChildNodes::Leaves(leaves) => {
+                let SplitResult { first, second } = strategy.split(&non_leaf.bb, leaves);
+                debug_assert!(leaves.is_empty());
+
+                non_leaf.bb = first.bb;
+                leaves.extend(first.entries);
+
+                NonLeafNode {
+                    bb: second.bb,
+                    children: ChildNodes::Leaves(second.entries),
+                }
+            }
+            ChildNodes::NonLeaves(non_leaves) => {
+                let SplitResult { first, second } = strategy.split(&non_leaf.bb, non_leaves);
+                debug_assert!(non_leaves.is_empty());
+
+                non_leaf.bb = first.bb;
+                non_leaves.extend(first.entries);
+
+                NonLeafNode {
+                    bb: second.bb,
+                    children: ChildNodes::NonLeaves(second.entries),
+                }
+            }
         }
     }
 }

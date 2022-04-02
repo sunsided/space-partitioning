@@ -13,7 +13,7 @@ pub(crate) mod non_leaf_node;
 pub(crate) mod prelude {
     pub(crate) use super::ChildNodes;
     pub(crate) use crate::rtree::nodes::leaf_node::LeafNode;
-    pub(crate) use crate::rtree::nodes::node_traits::{GetBoundingBox, Node};
+    pub(crate) use crate::rtree::nodes::node_traits::{AsBoundingBox, Node};
     pub(crate) use crate::rtree::nodes::non_leaf_node::NonLeafNode;
 }
 
