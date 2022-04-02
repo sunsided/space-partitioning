@@ -1,14 +1,7 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::nodes::{Entry, LeafNode};
-
-pub(crate) trait SplittingStrategy<T, const N: usize, const M: usize>
-where
-    T: DimensionType,
-{
-    // TODO: Allow for NonLeafNode as well
-    fn split(&self, node: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M>;
-}
+use crate::rtree::nodes::leaf_node::{Entry, LeafNode};
+use crate::rtree::splitting_strategies::SplittingStrategy;
 
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}

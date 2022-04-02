@@ -57,7 +57,8 @@ where
     }
 
     /// Tests whether this box fully contains another one.
-    pub fn contains(&self, other: &BoundingBox<T, N>) -> bool {
+    pub fn contains<B: Borrow<BoundingBox<T, N>>>(&self, other: B) -> bool {
+        let other = other.borrow();
         for i in 0..N {
             if !self.dims[i].contains(other.dims[i]) {
                 return false;

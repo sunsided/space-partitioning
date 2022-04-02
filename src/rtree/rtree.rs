@@ -1,7 +1,8 @@
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::linear_cost_split::{LinearCostSplitting, SplittingStrategy};
-use crate::rtree::nodes::{ChildNodes, GetBoundingBox, LeafNode, NonLeafNode};
+use crate::rtree::nodes::prelude::*;
+use crate::rtree::splitting_strategies::linear_cost_split::LinearCostSplitting;
+use crate::rtree::splitting_strategies::SplittingStrategy;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -228,6 +229,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::rtree::nodes::node_traits::Node;
 
     #[test]
     fn default_works() {
