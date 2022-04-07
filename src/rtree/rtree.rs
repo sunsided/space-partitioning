@@ -58,6 +58,7 @@ where
             None => Self::add_leaf_to_empty_node(parents.last().unwrap()),
         };
 
+        // Split the node if needed.
         let mut leaf = leaf.deref().borrow_mut();
         if !leaf.insert_unchecked(id, bb) {
             // Need to split the node here.
@@ -70,8 +71,10 @@ where
 
             // TODO: Might need to propagate the split upwards if the parent becomes overfull.
             debug_assert!(!parent.is_overfull());
-            todo!();
         }
+
+        // Adjust the tree.
+        self.adjust_tree();
 
         // Citing https://iq.opengenus.org/r-tree/
         //
@@ -191,7 +194,7 @@ where
         smallest_idx
     }
 
-    fn adjust_tree(&self) {
+    fn adjust_tree(&mut self) {
         // Citing https://iq.opengenus.org/r-tree/
         //
         // 1. Initialize
@@ -203,18 +206,16 @@ where
         //      Let P be the parent node of N, and let EN be N's entry in P.
         //      Adjust EN so that it tightly encloses all entry rectangles in N.
         // 4. Propagate node split upward
-        //      If N as a partner NN resulting from an earlier split,
+        //      If N has a partner NN resulting from an earlier split,
         //      create a new entry ENN with ENN pointing to NN and ENN enclosing all
         //      rectangles in NN. Add ENN to P if there is room, otherwise invoke `split_node`
-        //      to produce P and PP continuing ENN and all P's old entries.
+        //      to produce P and PP containing ENN and all P's old entries.
         // 5. Move up to the next level
         //      Set N=P and set NN=PP if a split occurred. Repeat from step 2.
         todo!()
     }
 
     fn split_leaf_node(&self, leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
-        // TODO: Make type parameter; bake into tree?
-        let strategy = LinearCostSplitting {};
         let SplitResult { first, second } = self.split_strategy.split(&leaf.bb, &mut leaf.entries);
 
         leaf.bb = first.bb;
@@ -284,7 +285,10 @@ mod test {
         tree.insert(0, BoundingBox::from([1.0..=2.0, 4.0..=17.0]));
         assert!(!tree.root.deref().borrow().is_empty());
         assert_eq!(tree.root.deref().borrow().len(), 1);
-        // TODO: The tree dimensions must now match the object's.
+        assert_eq!(
+            tree.root.deref().borrow().bb,
+            [1.0..=2.0, 4.0..=17.0].into()
+        );
     }
 
     #[test]
@@ -296,7 +300,10 @@ mod test {
         tree.insert(3, [82.0..=145.0, 30.0..=42.0].into());
 
         assert!(!tree.root.deref().borrow().is_empty());
-        assert_eq!(tree.root.deref().borrow().len(), 4);
-        // TODO: The tree dimensions must now match the object's.
+        assert_eq!(tree.root.deref().borrow().len(), 2); // two "top-level" leaf nodes
+        assert_eq!(
+            tree.root.deref().borrow().bb,
+            [16.0..=145.0, 12.0..=148.0].into()
+        );
     }
 }
