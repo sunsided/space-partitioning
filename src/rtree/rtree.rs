@@ -2,10 +2,6 @@ use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::prelude::*;
 use crate::rtree::splitting_strategies::linear_cost_split::LinearCostSplitting;
-use crate::rtree::splitting_strategies::{SplitResult, SplittingStrategy};
-use std::cell::RefCell;
-use std::ops::Deref;
-use std::rc::Rc;
 
 /// The R-Tree
 ///
@@ -13,32 +9,14 @@ use std::rc::Rc;
 /// * `T` - The coordinate type.
 /// * `N` - The number of dimensions per coordinate.
 /// * `M` - The maximum number of elements to store per leaf node.
+/// * `TupleIdentifier` - The type used to identify a tuple in application code.
 #[derive(Debug)]
-pub struct RTree<T, const N: usize, const M: usize>
+pub struct RTree<T, const N: usize, const M: usize, TupleIdentifier = usize>
 where
     T: DimensionType,
 {
-    /// The root node. Default trees always start
-    /// out with a leaf node that has zero elements.
-    root: Rc<RefCell<NonLeafNode<T, N, M>>>,
-
+    root: RTreeNode<T, N, M, TupleIdentifier>,
     split_strategy: LinearCostSplitting,
-}
-
-impl<T, const N: usize, const M: usize> Default for RTree<T, N, M>
-where
-    T: DimensionType,
-{
-    fn default() -> Self {
-        let root = NonLeafNode {
-            bb: BoundingBox::default(),
-            children: ChildNodes::Leaves(vec![]),
-        };
-        Self {
-            root: Rc::new(RefCell::new(root)),
-            split_strategy: LinearCostSplitting::default(),
-        }
-    }
 }
 
 impl<T, const N: usize, const M: usize> RTree<T, N, M>
@@ -47,151 +25,54 @@ where
 {
     /// Inserts an element into the tree.
     pub fn insert(&mut self, id: usize, bb: BoundingBox<T, N>) {
-        let MatchingLeaf { leaf, parents } = self.choose_leaf(&bb);
-
-        // Particularly if the tree is vanilla (e.g. default constructed)
-        // there is no leaf node to choose. In this case, we attach a new leaf to the
-        // deepest (and empty) non-leaf node; in case of the empty tree, this is the root.
-        debug_assert_ne!(parents.len(), 0);
-        let leaf = match leaf {
-            Some(leaf) => leaf,
-            None => Self::add_leaf_to_empty_node(parents.last().unwrap()),
-        };
-
-        // Split the node if needed.
-        let mut leaf = leaf.deref().borrow_mut();
-        if !leaf.insert_unchecked(id, bb) {
-            // Need to split the node here.
-            let new_leaf = self.split_leaf_node(&mut leaf);
-
-            // Insert the new leaf into the parent node.
-            let mut parent = parents.last().unwrap().deref().borrow_mut();
-            let entries = parent.children.to_leaves_mut();
-            entries.push(Rc::new(RefCell::new(new_leaf)));
-
-            // TODO: Might need to propagate the split upwards if the parent becomes overfull.
-            debug_assert!(!parent.is_overfull());
-        }
-
-        // Adjust the tree.
-        self.adjust_tree();
-
         // Citing https://iq.opengenus.org/r-tree/
         //
         // 1. Find position for new record:
         //      Invoke `choose_leaf` to select leaf node L in which to place the entry.
+        let trail = self.choose_leaf(&bb);
         // 2. Add record to leaf node.
         //      If L has room for another entry then add E, else
         //      invoke `split_node` to obtain L and LL (current leaf and new leaf containing all old entries of L)
+        if !node.is_full() {
+            todo!("Add item to this leaf")
+        } else {
+            todo!("Split the node")
+        }
+
         // 3. Propagate changes upward
         //      Invoke `adjust_tree` on L also passing LL if split was performed.
         // 4. Grow the tree taller
         //      If node split propagation caused the root to split, create a new root
         //      whose children are the two resulting nodes.
+
+        todo!()
     }
 
     /// Select a leaf node in which to place a new entry.
-    fn choose_leaf(&mut self, bb: &BoundingBox<T, N>) -> MatchingLeaf<T, N, M> {
-        let mut parents = vec![];
-        let mut current_node: Rc<RefCell<NonLeafNode<T, N, M>>> = self.root.clone();
-        loop {
-            parents.push(current_node.clone());
-
-            let next_node = match &current_node.deref().borrow().children {
-                ChildNodes::NonLeaves(non_leaves) => {
-                    let smallest_idx =
-                        Self::find_best_fitting_child_of_smallest_area(bb, non_leaves);
-                    let next_node = non_leaves[smallest_idx].clone();
-
-                    // Update this box's BB to fully contain the new object.
-                    next_node.deref().borrow_mut().bb.grow(bb);
-
-                    // Return next node for recursion.
-                    next_node
-                }
-                ChildNodes::Leaves(leaves) => {
-                    if leaves.is_empty() {
-                        return MatchingLeaf {
-                            leaf: None,
-                            parents,
-                        };
-                    }
-
-                    let smallest_idx = Self::find_best_fitting_child_of_smallest_area(bb, leaves);
-                    return MatchingLeaf {
-                        leaf: Some(leaves[smallest_idx].clone()),
-                        parents,
-                    };
-                }
-            };
-
-            // Recurse.
-            current_node = next_node;
-        }
-    }
-
-    /// Adds a new leaf node to an empty non-leaf node.
-    ///
-    /// ## Arguments
-    /// * `parent` - The parent node. Must be empty.
-    ///
-    /// ## Returns
-    /// The new leaf node. This node is already registered as a child of the `parent`.
-    fn add_leaf_to_empty_node(
-        parent: &Rc<RefCell<NonLeafNode<T, N, M>>>,
-    ) -> Rc<RefCell<LeafNode<T, N, M>>> {
-        let mut parent = parent.deref().borrow_mut();
-        assert!(parent.children.is_empty());
-
-        let new_leaf = Rc::new(RefCell::new(LeafNode::default()));
-        parent.children.to_leaves_mut().push(new_leaf.clone());
-        new_leaf
-    }
-
-    /// Determines the child that either fully accepts the provided bounding
-    /// box or requires the least increase in size; if multiple options exist, picks
-    /// the first one of the smallest area.
-    ///
-    /// ## Arguments
-    /// * `bb` - The bounding box of the object to add.
-    /// * `leaves` - The vector of leaf node. Must not be empty.
-    ///
-    /// ## Returns
-    /// Returns the index of the optimal fit.
-    fn find_best_fitting_child_of_smallest_area<B>(
+    fn choose_leaf(
+        &mut self,
         bb: &BoundingBox<T, N>,
-        leaves: &Vec<Rc<RefCell<B>>>,
-    ) -> usize
-    where
-        B: AsBoundingBox<T, N>,
-    {
-        debug_assert!(!leaves.is_empty());
-        let mut smallest_idx = usize::MAX;
-        let mut smallest_area = T::max_value();
-        let mut smallest_area_increase = T::max_value();
+    ) -> Vec<&mut RTreeNode<T, N, M, TupleIdentifier>> {
+        // Citing https://iq.opengenus.org/r-tree/
+        //
+        // 1. Initialize
+        //      Set N to be the root node
+        let mut trail = vec![&mut self.root]; // no element = root node
 
-        for c in 0..leaves.len() {
-            let leaf = leaves[c].deref().borrow();
-
-            // If the bb is already fully contained by the leaf,
-            // we ensure that we still pick the smallest leaf node.
-            let grown = leaf.as_bb().get_grown(bb);
-            let is_smaller_increase = grown.area_increase < smallest_area_increase;
-            let is_same_increase = grown.area_increase == smallest_area_increase;
-            let is_smaller_area = grown.area < smallest_area;
-
-            // We keep the leaf that results in a smaller area increase
-            // or, in case of a tie, with the smaller area.
-            if is_smaller_increase || (is_same_increase && is_smaller_area) {
-                smallest_idx = c;
-                smallest_area = grown.area;
-                smallest_area_increase = grown.area_increase;
-            }
+        // 2. Leaf check
+        //      If N is a leaf, return N
+        if self.root.is_leaf() {
+            return trail;
         }
 
-        debug_assert_ne!(smallest_idx, usize::MAX);
-        debug_assert_ne!(smallest_area, T::max_value());
-        smallest_idx
+        // 3. Choose subtree
+        //      If N is a leaf, let F be the entry in N whose rectangle F1
+        //      needs least enlargement to include E1. Resolve ties by choosing
+        //      the entry with the rectangle of the smallest area.
+        // 4. Descend until leaf is reached
+        //      Set N to be child node pointed to by Fp and repeat from step 2.
+
+        todo!("Descend into child nodes")
     }
 
     fn adjust_tree(&mut self) {
@@ -215,56 +96,22 @@ where
         todo!()
     }
 
-    fn split_leaf_node(&self, leaf: &mut LeafNode<T, N, M>) -> LeafNode<T, N, M> {
-        let SplitResult { first, second } = self.split_strategy.split(&leaf.bb, &mut leaf.entries);
-
-        leaf.bb = first.bb;
-        leaf.entries = first.entries;
-
-        LeafNode {
-            bb: second.bb,
-            entries: second.entries,
-        }
-    }
-
-    fn split_non_leaf_node(&self, non_leaf: &mut NonLeafNode<T, N, M>) -> NonLeafNode<T, N, M> {
-        match &mut non_leaf.children {
-            ChildNodes::Leaves(leaves) => {
-                let SplitResult { first, second } = self.split_strategy.split(&non_leaf.bb, leaves);
-                debug_assert!(leaves.is_empty());
-
-                non_leaf.bb = first.bb;
-                leaves.extend(first.entries);
-
-                NonLeafNode {
-                    bb: second.bb,
-                    children: ChildNodes::Leaves(second.entries),
-                }
-            }
-            ChildNodes::NonLeaves(non_leaves) => {
-                let SplitResult { first, second } =
-                    self.split_strategy.split(&non_leaf.bb, non_leaves);
-                debug_assert!(non_leaves.is_empty());
-
-                non_leaf.bb = first.bb;
-                non_leaves.extend(first.entries);
-
-                NonLeafNode {
-                    bb: second.bb,
-                    children: ChildNodes::NonLeaves(second.entries),
-                }
-            }
-        }
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.root.is_empty()
     }
 }
 
-#[derive(Debug)]
-struct MatchingLeaf<T, const N: usize, const M: usize>
+impl<T, const N: usize, const M: usize, TupleIdentifier> Default for RTree<T, N, M, TupleIdentifier>
 where
     T: DimensionType,
 {
-    pub leaf: Option<Rc<RefCell<LeafNode<T, N, M>>>>,
-    pub parents: Vec<Rc<RefCell<NonLeafNode<T, N, M>>>>,
+    fn default() -> Self {
+        Self {
+            root: RTreeNode::default(),
+            split_strategy: LinearCostSplitting::default(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -275,20 +122,18 @@ mod test {
     #[test]
     fn default_works() {
         let r: RTree<f32, 2, 10> = RTree::default();
-        assert!(r.root.deref().borrow().is_empty());
-        assert_eq!(r.root.deref().borrow().len(), 0);
+        assert!(r.is_empty());
     }
 
     #[test]
     fn simple_insert_works() {
         let mut tree = RTree::<f32, 2, 2>::default();
         tree.insert(0, BoundingBox::from([1.0..=2.0, 4.0..=17.0]));
-        assert!(!tree.root.deref().borrow().is_empty());
-        assert_eq!(tree.root.deref().borrow().len(), 1);
-        assert_eq!(
-            tree.root.deref().borrow().bb,
-            [1.0..=2.0, 4.0..=17.0].into()
-        );
+        //let root = tree.leaf_nodes[tree.root_id.get()].as_ref().unwrap();
+        //assert!(!root.is_empty());
+        //assert_eq!(root.len(), 1);
+        //assert_eq!(root.to_bb(), [1.0..=2.0, 4.0..=17.0].into());
+        todo!();
     }
 
     #[test]
@@ -299,11 +144,10 @@ mod test {
         tree.insert(2, [82.0..=94.0, 12.0..=148.0].into());
         tree.insert(3, [82.0..=145.0, 30.0..=42.0].into());
 
-        assert!(!tree.root.deref().borrow().is_empty());
-        assert_eq!(tree.root.deref().borrow().len(), 2); // two "top-level" leaf nodes
-        assert_eq!(
-            tree.root.deref().borrow().bb,
-            [16.0..=145.0, 12.0..=148.0].into()
-        );
+        //let root = tree.leaf_nodes[tree.root_id.get()].as_ref().unwrap();
+        //assert!(!root.is_empty());
+        //assert_eq!(root.len(), 2); // two "top-level" leaf nodes
+        //assert_eq!(root.to_bb(), [16.0..=145.0, 12.0..=148.0].into());
+        todo!()
     }
 }

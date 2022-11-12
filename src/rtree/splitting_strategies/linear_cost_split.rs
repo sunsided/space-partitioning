@@ -1,35 +1,59 @@
 use crate::rtree::bounding_box::{BoundingBox, BoxAndArea};
 use crate::rtree::dimension_type::DimensionType;
-use crate::rtree::nodes::leaf_node::LeafNode;
-use crate::rtree::nodes::node_traits::ToBoundingBox;
+use crate::rtree::nodes::node_traits::HasBoundingBox;
+use crate::rtree::nodes::prelude::Node;
 use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrategy};
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}
 
-impl<T, TEntry, const N: usize> SplittingStrategy<T, TEntry, N> for LinearCostSplitting
+impl<T, TEntry, const N: usize, const M: usize> SplittingStrategy<T, TEntry, N, M>
+    for LinearCostSplitting
 where
     T: DimensionType,
-    TEntry: ToBoundingBox<T, N>,
+    TEntry: HasBoundingBox<T, N>,
 {
     fn split(
         &self,
         area: &BoundingBox<T, N>,
-        entries: &mut Vec<TEntry>,
-    ) -> SplitResult<T, TEntry, N> {
-        // Find the best candidates and pop them from the set in reverse order (highest index first).
-        let (best_a, best_b) = linear_pick_seeds(&entries, &area);
-        let best_b = entries.remove(best_b);
-        let best_a = entries.remove(best_a);
+        existing_entries: &mut ArrayVec<TEntry, M>,
+        new_entry: TEntry,
+    ) -> SplitResult<T, TEntry, N, M> {
+        // Ensure the area contains the new element as well.
+        let area = area.clone().into_grown(new_entry.to_bb());
+
+        // Find the best candidates and remove them from the set.
+        let (best_a, best_b) = linear_pick_seeds(&existing_entries, &new_entry, &area);
+
+        let (best_a, best_b) = match (best_a, best_b) {
+            (None, None) => unreachable!(),
+            (Some(best_a), None) => (existing_entries.remove(best_a), new_entry),
+            (None, Some(best_b)) => (new_entry, existing_entries.remove(best_b)),
+            (Some(best_a), Some(best_b)) => {
+                // Pop them from the set in reverse order (highest index first).
+                let best_b = existing_entries.remove(best_b);
+                let best_a = existing_entries.remove(best_a);
+
+                // In this case, the new entry was not accounted for. The removal of at least
+                // one element here however leaves enough space to add it to the list for further
+                // processing, as if it had been added before.
+                existing_entries.push(new_entry);
+
+                (best_a, best_b)
+            }
+        };
 
         let mut box_a = best_a.to_bb();
         let mut box_b = best_b.to_bb();
 
-        let mut group_a = vec![best_a];
-        let mut group_b = vec![best_b];
+        let mut group_a: ArrayVec<_, M> = ArrayVec::new();
+        let mut group_b: ArrayVec<_, M> = ArrayVec::new();
+        group_a.push(best_a);
+        group_b.push(best_b);
 
         // TODO: If one group has so few entries that the rest must be assigned for it to have the minimum number of elements, assign the rest and stop.
-        while let Some(item) = entries.pop() {
+        while let Some(item) = existing_entries.pop() {
             let a_grown = box_a.get_grown(item.to_bb());
             let b_grown = box_b.get_grown(item.to_bb());
 
@@ -62,23 +86,26 @@ where
 ///
 /// ## Arguments
 /// * `entries` - The entries to choose from.
+/// * `new_entry` - The new entry to add.
 /// * `area` - The minimal bounding box of all entries.
 ///
 /// ## Returns
 /// A tuple of two distinct indexes.
 /// The entries are sorted in ascending order such that elements can be removed from
 /// a vector back to front.
+/// A value of [`Option<usize>::None`] indicates the new item to be added.
 fn linear_pick_seeds<T, TEntry, const N: usize>(
     entries: &[TEntry],
+    new_entry: &TEntry,
     area: &BoundingBox<T, N>,
-) -> (usize, usize)
+) -> (Option<usize>, Option<usize>)
 where
     T: DimensionType,
-    TEntry: ToBoundingBox<T, N>,
+    TEntry: HasBoundingBox<T, N>,
 {
     debug_assert!(entries.len() > 1);
-    let mut highest_lows = vec![(T::min_value(), 0usize); N];
-    let mut lowest_highs = vec![(T::max_value(), 0usize); N];
+    let mut highest_lows = [(T::min_value(), None); N];
+    let mut lowest_highs = [(T::max_value(), None); N];
 
     for item_idx in 0..entries.len() {
         let bb = entries[item_idx].to_bb();
@@ -88,19 +115,37 @@ where
             // Find the entry of the highest low dimension,
             // i.e. the start coordinate being the highest.
             if extent.start > highest_lows[dim].0 {
-                highest_lows[dim] = (extent.start, item_idx);
+                highest_lows[dim] = (extent.start, Some(item_idx));
             }
 
             // Find the entry of the lowest high dimension.
             // i.e. the end coordinate being the lowest.
             if extent.end < lowest_highs[dim].0 {
-                lowest_highs[dim] = (extent.end, item_idx);
+                lowest_highs[dim] = (extent.end, Some(item_idx));
             }
         }
     }
 
+    // Repeat with the new entry.
+    let bb = new_entry.to_bb();
+    for dim in 0..N {
+        let extent = bb.dims[dim];
+
+        // Find the entry of the highest low dimension,
+        // i.e. the start coordinate being the highest.
+        if extent.start > highest_lows[dim].0 {
+            highest_lows[dim] = (extent.start, None);
+        }
+
+        // Find the entry of the lowest high dimension.
+        // i.e. the end coordinate being the lowest.
+        if extent.end < lowest_highs[dim].0 {
+            lowest_highs[dim] = (extent.end, None);
+        }
+    }
+
     let mut highest_separation = T::min_value();
-    let (mut best_a, mut best_b) = (0usize, 0usize);
+    let (mut best_a, mut best_b) = (None, None);
 
     for dim in 0..N {
         let width = area.dims[dim].len();
@@ -169,17 +214,24 @@ fn decide_group<T: DimensionType, const N: usize>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::rtree::nodes::rtree_leaf::IndexRecordEntry;
 
     #[test]
     fn split_works() {
-        let mut old_node = LeafNode::<f64, 2, 3>::default();
-        old_node.insert(0, [16.0..=68.0, 23.0..=35.0].into());
-        old_node.insert(1, [55.0..=68.0, 12.0..=148.0].into());
-        old_node.insert(2, [82.0..=94.0, 12.0..=148.0].into());
-        old_node.insert(3, [82.0..=145.0, 30.0..=42.0].into());
+        let mut existing_entries = ArrayVec::from([
+            IndexRecordEntry::new(0, [16.0..=68.0, 23.0..=35.0]),
+            IndexRecordEntry::new(1, [55.0..=68.0, 12.0..=148.0]),
+            IndexRecordEntry::new(2, [82.0..=94.0, 12.0..=148.0]),
+        ]);
+
+        let new_entry = IndexRecordEntry::new(3, [82.0..=145.0, 30.0..=42.0]);
 
         let strategy = LinearCostSplitting {};
-        let result = strategy.split(&old_node.bb, &mut old_node.entries);
+        let result: SplitResult<_, _, 2, 3> = strategy.split(
+            &existing_entries.as_slice().to_bb(),
+            &mut existing_entries,
+            new_entry,
+        );
 
         // Group a contains both horizontal items.
         debug_assert!(result.first.entries.iter().any(|x| x.id == 0));

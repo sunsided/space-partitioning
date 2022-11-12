@@ -29,6 +29,7 @@ harness = false
 [dependencies]
 smallvec = { version = "1.6.1", features = ["union", "const_generics"] }
 num-traits = "0.2.14"
+arrayvec = "0.7.2"
 
 # Build all dependencies (but not this workspace) with optimizations enabled.
 [profile.dev.package."*"]

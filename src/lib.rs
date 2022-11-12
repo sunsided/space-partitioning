@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod intersections;
 pub mod interval_tree;
 pub mod quadtree;

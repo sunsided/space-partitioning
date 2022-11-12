@@ -75,6 +75,16 @@ where
         }
     }
 
+    /// Grows this bounding box of this node to tightly fit all elements.
+    /// Consumes self and returns an updated version.
+    pub fn into_grown<B: Borrow<BoundingBox<T, N>>>(mut self, other: B) -> BoundingBox<T, N> {
+        let other = other.borrow();
+        for d in 0..N {
+            self.dims[d].grow(&other.dims[d]);
+        }
+        self
+    }
+
     /// Calculates the area of the box.
     pub fn area(&self) -> T {
         let mut area = T::one();
