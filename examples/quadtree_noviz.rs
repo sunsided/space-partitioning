@@ -190,7 +190,9 @@ impl Mouse {
 struct Ray {
     x: f32,
     y: f32,
+    #[allow(dead_code)]
     dx: f32,
+    #[allow(dead_code)]
     dy: f32,
     inv_dx: f32,
     inv_dy: f32,

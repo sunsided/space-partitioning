@@ -317,6 +317,9 @@ fn build_spheres(seed: u64, count: usize, radius_range: std::ops::Range<i32>) ->
 }
 
 fn z_range(spheres: &[Sphere]) -> (i32, i32) {
+    if spheres.is_empty() {
+        return (0, 0);
+    }
     let mut min_z = i32::MAX;
     let mut max_z = i32::MIN;
     for sphere in spheres {

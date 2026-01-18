@@ -62,7 +62,6 @@ where
 
 impl<Target, T, const N: usize> HasBoundingBox<T, N> for [Target]
 where
-    //Target: HasBoundingBox<T, N>,
     Target: Borrow<BoundingBox<T, N>>,
     T: DimensionType,
 {

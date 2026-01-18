@@ -179,11 +179,14 @@ where
         let lo_hi = lowest_highs[dim].0;
         let hi_lo = highest_lows[dim].0;
 
-        // Using a makeshift "abs" here to avoid requiring the Ord or Real trait.
-        // TODO: Is the "abs" correct here? Issue might be arising from flipped coordinate systems (0 top-left or bottom-left)
-        let sep_a = lo_hi - hi_lo;
-        let sep_b = hi_lo - lo_hi;
-        let separation = if sep_a > sep_b { sep_a } else { sep_b };
+        // Compute the absolute separation between the lowest high and highest low.
+        // Coordinate system orientation (e.g., origin at top-left vs bottom-left) affects
+        // the sign of coordinates but not the magnitude of their difference, so this is stable.
+        let separation = if lo_hi >= hi_lo {
+            lo_hi - hi_lo
+        } else {
+            hi_lo - lo_hi
+        };
 
         let normalized_separation = if width == T::zero() {
             T::zero()

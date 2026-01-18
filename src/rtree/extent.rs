@@ -278,7 +278,7 @@ pub mod test {
     }
 
     #[test]
-    fn extent_does_not_contain_overlapping_rangers() {
+    fn extent_does_not_contain_overlapping_ranges() {
         let e = Extent::from(2.0..=5.0);
         assert!(!e.contains(2.1..=5.1));
         assert!(!e.contains(1.9..=4.9));
