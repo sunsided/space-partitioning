@@ -13,7 +13,9 @@ pub(crate) trait Node<T, const N: usize, const M: usize>: HasBoundingBox<T, N>
 where
     T: DimensionType,
 {
+    /// Maximum number of entries a node can hold before splitting.
     const MAX_FILL: usize = M;
+    /// Minimum number of entries to keep in a non-root node after condensing.
     const MIN_FILL: usize = M.div_ceil(2);
 
     /// Determines if this is full (including overfull).
@@ -53,6 +55,8 @@ where
     fn contains<B: Borrow<BoundingBox<T, N>>>(&self, other: B) -> bool;
 
     /// Builds a bounding box that minimally spans all child nodes or elements.
+    ///
+    /// Implementations should return the tightest box that encloses all children.
     fn to_bb(&self) -> BoundingBox<T, N>;
 }
 

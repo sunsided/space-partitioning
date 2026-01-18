@@ -4,6 +4,10 @@ use crate::rtree::nodes::node_traits::HasBoundingBox;
 use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrategy};
 use arrayvec::ArrayVec;
 
+/// Linear-cost split strategy from the original R-Tree paper.
+///
+/// This favors speed by approximating optimal splits using extreme
+/// projections and area enlargement heuristics.
 #[derive(Debug, Default, Clone)]
 pub struct LinearCostSplitting {}
 
@@ -19,6 +23,9 @@ where
         existing_entries: &mut ArrayVec<TEntry, M>,
         new_entry: TEntry,
     ) -> SplitResult<T, TEntry, N, M> {
+        // Linear-cost split from the original R-Tree paper.
+        // We pick two seeds that are maximally separated and then distribute
+        // remaining entries by minimal area enlargement.
         // Ensure the area contains the new element as well.
         let area = area.clone().into_grown(new_entry.to_bb());
 
@@ -53,6 +60,7 @@ where
 
         let min_fill = M.div_ceil(2);
         while !existing_entries.is_empty() {
+            // Enforce minimum fill by shortcutting assignments if needed.
             if group_a.len() + existing_entries.len() == min_fill {
                 while let Some(item) = existing_entries.pop() {
                     box_a = box_a.get_grown(item.to_bb()).bb;
@@ -293,10 +301,7 @@ mod test {
 
         assert!(result.first.entries.len() >= 2);
         assert!(result.second.entries.len() >= 2);
-        assert_eq!(
-            result.first.entries.len() + result.second.entries.len(),
-            5
-        );
+        assert_eq!(result.first.entries.len() + result.second.entries.len(), 5);
     }
 
     #[test]
@@ -317,9 +322,6 @@ mod test {
             new_entry,
         );
 
-        assert_eq!(
-            result.first.entries.len() + result.second.entries.len(),
-            5
-        );
+        assert_eq!(result.first.entries.len() + result.second.entries.len(), 5);
     }
 }

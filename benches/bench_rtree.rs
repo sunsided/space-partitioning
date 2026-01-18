@@ -1,6 +1,4 @@
-use criterion::{
-    black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion,
-};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use space_partitioning::rtree::{BoundingBox, RTree, RTreeEntry};
@@ -72,62 +70,90 @@ fn criterion_benchmark(c: &mut Criterion) {
     remove_group.finish();
 }
 
-fn bench_insert_m8(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, data: &BenchData) {
-    group.bench_with_input(BenchmarkId::new("M8", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || entries.clone(),
-            |entries| {
-                let mut tree: RTree<f32, 2, 8, u32> = RTree::default();
-                for (id, bb) in entries {
-                    tree.insert(id, bb);
-                }
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+fn bench_insert_m8(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    group.bench_with_input(
+        BenchmarkId::new("M8", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || entries.clone(),
+                |entries| {
+                    let mut tree: RTree<f32, 2, 8, u32> = RTree::default();
+                    for (id, bb) in entries {
+                        tree.insert(id, bb);
+                    }
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
-fn bench_insert_m16(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, data: &BenchData) {
-    group.bench_with_input(BenchmarkId::new("M16", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || entries.clone(),
-            |entries| {
-                let mut tree: RTree<f32, 2, 16, u32> = RTree::default();
-                for (id, bb) in entries {
-                    tree.insert(id, bb);
-                }
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+fn bench_insert_m16(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    group.bench_with_input(
+        BenchmarkId::new("M16", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || entries.clone(),
+                |entries| {
+                    let mut tree: RTree<f32, 2, 16, u32> = RTree::default();
+                    for (id, bb) in entries {
+                        tree.insert(id, bb);
+                    }
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
-fn bench_bulk_load_m8(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, data: &BenchData) {
-    group.bench_with_input(BenchmarkId::new("M8", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || entries.clone(),
-            |entries| {
-                let tree: RTree<f32, 2, 8, u32> = RTree::bulk_load(entries);
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+fn bench_bulk_load_m8(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    group.bench_with_input(
+        BenchmarkId::new("M8", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || entries.clone(),
+                |entries| {
+                    let tree: RTree<f32, 2, 8, u32> = RTree::bulk_load(entries);
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
-fn bench_bulk_load_m16(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, data: &BenchData) {
-    group.bench_with_input(BenchmarkId::new("M16", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || entries.clone(),
-            |entries| {
-                let tree: RTree<f32, 2, 16, u32> = RTree::bulk_load(entries);
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+fn bench_bulk_load_m16(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    group.bench_with_input(
+        BenchmarkId::new("M16", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || entries.clone(),
+                |entries| {
+                    let tree: RTree<f32, 2, 16, u32> = RTree::bulk_load(entries);
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
 fn bench_bulk_load_entries_m8(
@@ -177,15 +203,18 @@ fn bench_query_intersects_m8(
     queries: &[BoundingBox<f32, 2>],
 ) {
     let tree = build_tree_m8(&data.entries);
-    group.bench_function(BenchmarkId::new(format!("M8_{label}"), data.entries.len()), |b| {
-        b.iter(|| {
-            let mut hits = 0usize;
-            for query in queries {
-                hits += tree.query_intersects(query).len();
-            }
-            black_box(hits);
-        });
-    });
+    group.bench_function(
+        BenchmarkId::new(format!("M8_{label}"), data.entries.len()),
+        |b| {
+            b.iter(|| {
+                let mut hits = 0usize;
+                for query in queries {
+                    hits += tree.query_intersects(query).len();
+                }
+                black_box(hits);
+            });
+        },
+    );
 }
 
 fn bench_query_intersects_m16(
@@ -195,15 +224,18 @@ fn bench_query_intersects_m16(
     queries: &[BoundingBox<f32, 2>],
 ) {
     let tree = build_tree_m16(&data.entries);
-    group.bench_function(BenchmarkId::new(format!("M16_{label}"), data.entries.len()), |b| {
-        b.iter(|| {
-            let mut hits = 0usize;
-            for query in queries {
-                hits += tree.query_intersects(query).len();
-            }
-            black_box(hits);
-        });
-    });
+    group.bench_function(
+        BenchmarkId::new(format!("M16_{label}"), data.entries.len()),
+        |b| {
+            b.iter(|| {
+                let mut hits = 0usize;
+                for query in queries {
+                    hits += tree.query_intersects(query).len();
+                }
+                black_box(hits);
+            });
+        },
+    );
 }
 
 fn bench_query_contains_m8(
@@ -213,15 +245,18 @@ fn bench_query_contains_m8(
     queries: &[BoundingBox<f32, 2>],
 ) {
     let tree = build_tree_m8(&data.entries);
-    group.bench_function(BenchmarkId::new(format!("M8_{label}"), data.entries.len()), |b| {
-        b.iter(|| {
-            let mut hits = 0usize;
-            for query in queries {
-                hits += tree.query_contains(query).len();
-            }
-            black_box(hits);
-        });
-    });
+    group.bench_function(
+        BenchmarkId::new(format!("M8_{label}"), data.entries.len()),
+        |b| {
+            b.iter(|| {
+                let mut hits = 0usize;
+                for query in queries {
+                    hits += tree.query_contains(query).len();
+                }
+                black_box(hits);
+            });
+        },
+    );
 }
 
 fn bench_query_contains_m16(
@@ -231,15 +266,18 @@ fn bench_query_contains_m16(
     queries: &[BoundingBox<f32, 2>],
 ) {
     let tree = build_tree_m16(&data.entries);
-    group.bench_function(BenchmarkId::new(format!("M16_{label}"), data.entries.len()), |b| {
-        b.iter(|| {
-            let mut hits = 0usize;
-            for query in queries {
-                hits += tree.query_contains(query).len();
-            }
-            black_box(hits);
-        });
-    });
+    group.bench_function(
+        BenchmarkId::new(format!("M16_{label}"), data.entries.len()),
+        |b| {
+            b.iter(|| {
+                let mut hits = 0usize;
+                for query in queries {
+                    hits += tree.query_contains(query).len();
+                }
+                black_box(hits);
+            });
+        },
+    );
 }
 
 fn bench_nearest_neighbor_m8(
@@ -282,36 +320,44 @@ fn bench_remove_m8(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     data: &BenchData,
 ) {
-    group.bench_with_input(BenchmarkId::new("M8", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || build_tree_m8(entries),
-            |mut tree| {
-                for (id, bb) in entries {
-                    tree.remove(id, bb);
-                }
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+    group.bench_with_input(
+        BenchmarkId::new("M8", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || build_tree_m8(entries),
+                |mut tree| {
+                    for (id, bb) in entries {
+                        tree.remove(id, bb);
+                    }
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
 fn bench_remove_m16(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     data: &BenchData,
 ) {
-    group.bench_with_input(BenchmarkId::new("M16", data.entries.len()), &data.entries, |b, entries| {
-        b.iter_batched(
-            || build_tree_m16(entries),
-            |mut tree| {
-                for (id, bb) in entries {
-                    tree.remove(id, bb);
-                }
-                black_box(tree);
-            },
-            BatchSize::LargeInput,
-        );
-    });
+    group.bench_with_input(
+        BenchmarkId::new("M16", data.entries.len()),
+        &data.entries,
+        |b, entries| {
+            b.iter_batched(
+                || build_tree_m16(entries),
+                |mut tree| {
+                    for (id, bb) in entries {
+                        tree.remove(id, bb);
+                    }
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 }
 
 fn build_tree_m8(entries: &[Entry]) -> RTree<f32, 2, 8, u32> {
@@ -359,7 +405,12 @@ fn build_entries(seed: u64, count: usize, space: &Range<f32>, size: &Range<f32>)
     entries
 }
 
-fn build_queries(seed: u64, count: usize, space: &Range<f32>, size: &Range<f32>) -> Vec<BoundingBox<f32, 2>> {
+fn build_queries(
+    seed: u64,
+    count: usize,
+    space: &Range<f32>,
+    size: &Range<f32>,
+) -> Vec<BoundingBox<f32, 2>> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut queries = Vec::with_capacity(count);
     for _ in 0..count {

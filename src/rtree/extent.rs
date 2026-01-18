@@ -4,6 +4,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Range, RangeInclusive};
 
 /// Extents along a dimension.
+///
+/// # Invariants
+/// - `start <= end`.
 #[derive(Copy, Clone, PartialEq)]
 pub struct Extent<T>
 where
@@ -19,7 +22,7 @@ impl<T> Extent<T>
 where
     T: DimensionType,
 {
-    /// Initializes a new box from coordinates.
+    /// Initializes a new extent from coordinates.
     ///
     /// ## Arguments
     /// * `start` - The start coordinate along the dimension.
@@ -29,7 +32,7 @@ where
         Self { start, end }
     }
 
-    /// Initializes a new box from coordinates.
+    /// Initializes a new extent from coordinates.
     ///
     /// ## Arguments
     /// * `start` - The start coordinate along the dimension.
@@ -108,6 +111,7 @@ where
 }
 
 pub trait Contains<T> {
+    /// Returns `true` if `self` fully covers `value`.
     fn contains(self, value: T) -> bool;
 }
 

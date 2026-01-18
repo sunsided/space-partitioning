@@ -10,6 +10,10 @@ use std::ops::RangeInclusive;
 ///
 /// The struct is parameterized by `T`, the data type of a
 /// dimension, and `N`, the number of dimensions.
+///
+/// # Invariants
+/// - Each extent in `dims` satisfies `start <= end`.
+/// - `N` is fixed at compile-time and must be greater than zero.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoundingBox<T, const N: usize>
 where
@@ -103,6 +107,8 @@ where
     }
 
     /// Calculates the area of the box.
+    ///
+    /// For `N > 2`, this is the N-dimensional hypervolume.
     pub fn area(&self) -> T {
         let mut area = T::one();
         for d in 0..N {
@@ -137,10 +143,9 @@ where
 
     pub(crate) fn distance2_to_point(&self, point: &[T; N]) -> T {
         let mut dist = T::zero();
-        for i in 0..N {
+        for (i, &p) in point.iter().enumerate().take(N) {
             let start = self.dims[i].start;
             let end = self.dims[i].end;
-            let p = point[i];
             let delta = if p < start {
                 start - p
             } else if p > end {
@@ -159,8 +164,11 @@ pub struct BoxAndArea<T, const N: usize>
 where
     T: DimensionType,
 {
+    /// Bounding box after growth.
     pub(crate) bb: BoundingBox<T, N>,
+    /// Area (hypervolume) of the box.
     pub area: T,
+    /// Increase in area relative to the original box.
     pub area_increase: T,
 }
 

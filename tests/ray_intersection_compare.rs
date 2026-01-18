@@ -1,5 +1,5 @@
 use space_partitioning::intersections::IntersectsWith;
-use space_partitioning::quadtree::{AABB, QuadRect, QuadTreeElement};
+use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
 use space_partitioning::rtree::{BoundingBox, RTree};
 use space_partitioning::QuadTree;
 

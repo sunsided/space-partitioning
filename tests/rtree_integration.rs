@@ -1,5 +1,5 @@
-use space_partitioning::rtree::{BoundingBox, RTree};
 use space_partitioning::rtree::BulkLoadStrategy;
+use space_partitioning::rtree::{BoundingBox, RTree};
 
 #[test]
 fn insert_and_query_intersects_works() {
@@ -77,7 +77,8 @@ fn bulk_load_with_strategy_insertion_works() {
         (40, BoundingBox::from([1.0..=2.0, 0.0..=1.0])),
     ];
 
-    let tree: RTree<f32, 2, 2> = RTree::bulk_load_with_strategy(entries, BulkLoadStrategy::Insertion);
+    let tree: RTree<f32, 2, 2> =
+        RTree::bulk_load_with_strategy(entries, BulkLoadStrategy::Insertion);
     let hits = tree.query_intersects(&BoundingBox::from([1.5..=4.5, 1.5..=4.5]));
     let mut ids: Vec<_> = hits.iter().map(|entry| entry.id).collect();
     ids.sort();

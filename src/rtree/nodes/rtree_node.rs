@@ -51,6 +51,8 @@ where
     T: DimensionType,
 {
     /// The minimum bounding box of the child node.
+    ///
+    /// Invariant: this box tightly encloses the `pointer` contents.
     pub bb: BoundingBox<T, N>,
     /// The pointer to the child node.
     pub pointer: Box<TNode>,
@@ -82,6 +84,7 @@ where
     TNode: HasBoundingBox<T, N>,
 {
     #[inline]
+    /// Recomputes the bounding box based on the current child contents.
     pub fn recompute_bb(&mut self) {
         self.bb = self.pointer.to_bb();
     }
@@ -176,6 +179,7 @@ where
         }
     }
 
+    /// Builds a bounding box that minimally spans all child pointers.
     pub fn to_bb(&self) -> BoundingBox<T, N> {
         match self {
             Self::Leaf(leaf) => {

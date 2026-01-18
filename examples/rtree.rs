@@ -8,8 +8,14 @@ fn main() {
     tree.insert(4, BoundingBox::from([1.0..=2.0, 0.0..=1.0]));
 
     let intersects = tree.query_intersects(&BoundingBox::from([1.5..=4.5, 1.5..=4.5]));
-    println!("intersects ids: {:?}", intersects.iter().map(|entry| entry.id).collect::<Vec<_>>());
+    println!(
+        "intersects ids: {:?}",
+        intersects.iter().map(|entry| entry.id).collect::<Vec<_>>()
+    );
 
     let contains = tree.query_contains(&BoundingBox::from([0.0..=3.0, 0.0..=3.0]));
-    println!("contains ids: {:?}", contains.iter().map(|entry| entry.id).collect::<Vec<_>>());
+    println!(
+        "contains ids: {:?}",
+        contains.iter().map(|entry| entry.id).collect::<Vec<_>>()
+    );
 }

@@ -18,6 +18,8 @@ where
     T: DimensionType,
 {
     /// The entries of the object records.
+    ///
+    /// Invariant: `entries.len() <= M`.
     pub entries: ArrayVec<IndexRecordEntry<T, N, TupleIdentifier>, M>,
 }
 
@@ -62,6 +64,7 @@ where
     T: DimensionType,
 {
     #[inline]
+    /// Creates a new index record from an identifier and bounding box.
     pub fn new<B: Into<BoundingBox<T, N>>>(id: TupleIdentifier, bb: B) -> Self {
         Self { id, bb: bb.into() }
     }

@@ -1,3 +1,5 @@
+//! Node split strategies used by the R-Tree.
+
 use crate::rtree::dimension_type::DimensionType;
 use arrayvec::ArrayVec;
 
@@ -5,7 +7,7 @@ pub mod linear_cost_split;
 use crate::rtree::bounding_box::BoundingBox;
 
 pub(crate) mod prelude {
-    
+    //! Internal prelude for split strategies.
 }
 
 /// Trait for strategies used to split overfull nodes.
@@ -19,6 +21,12 @@ pub(crate) trait SplittingStrategy<T, TEntry, const N: usize, const M: usize>
 where
     T: DimensionType,
 {
+    /// Splits a node that has reached capacity.
+    ///
+    /// # Expectations
+    /// - `existing_entries.len() == M` before insertion.
+    /// - The result distributes all `existing_entries` plus `new_entry`.
+    /// - Both groups contain at least `ceil(M / 2)` entries.
     fn split(
         &self,
         area: &BoundingBox<T, N>,

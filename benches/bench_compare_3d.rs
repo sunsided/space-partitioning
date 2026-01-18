@@ -1,10 +1,8 @@
-use criterion::{
-    black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion,
-};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use space_partitioning::intersections::IntersectsWith;
-use space_partitioning::quadtree::{AABB, QuadRect, QuadTreeElement};
+use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
 use space_partitioning::rtree::{BoundingBox, RTree};
 use space_partitioning::QuadTree;
 

@@ -1,3 +1,8 @@
+//! Core R-Tree implementation.
+//!
+//! This module provides the main `RTree` type and its query APIs.
+//! It is intentionally low-level; higher-level examples live in `examples/`.
+
 use crate::intersections::IntersectsWith;
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
@@ -17,29 +22,44 @@ use std::cmp::Ordering;
 /// * `N` - The number of dimensions per coordinate.
 /// * `M` - The maximum number of elements to store per leaf node.
 /// * `TupleIdentifier` - The type used to identify a tuple in application code.
+///
+/// # Invariants
+/// - `root` always exists and contains all entries.
+/// - Each node's bounding box encloses its children or entries.
 #[derive(Debug)]
 pub struct RTree<T, const N: usize, const M: usize, TupleIdentifier = usize>
 where
     T: DimensionType,
 {
+    /// Root node of the tree. Always present; may be a leaf for small trees.
     root: RTreeNode<T, N, M, TupleIdentifier>,
+    /// Split strategy used when a node overflows.
     split_strategy: LinearCostSplitting,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum BulkLoadStrategy {
+    /// Sort-Tile-Recursive bulk-loading (fast, lower-quality than insertion for some distributions).
     Str,
+    /// Insert entries one-by-one using the standard insertion algorithm.
     Insertion,
 }
 
+/// Path to a leaf node, used during insert/adjust operations.
 struct LeafPath {
+    /// Indices of child pointers from the root to the parent of the leaf-level node.
     node_indices: Vec<usize>,
+    /// Index of the leaf child within the leaf-level node.
     leaf_index: Option<usize>,
 }
 
+/// Path to a specific entry in a leaf node, used during removal.
 struct LeafEntryPath {
+    /// Indices of child pointers from the root to the parent of the leaf-level node.
     node_indices: Vec<usize>,
+    /// Index of the leaf child within the leaf-level node.
     leaf_child_index: usize,
+    /// Index of the entry within the leaf child.
     entry_index: usize,
 }
 
@@ -48,6 +68,17 @@ where
     T: DimensionType,
 {
     /// Inserts an element into the tree.
+    ///
+    /// The entry's bounding box must satisfy `start <= end` for all dimensions.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 2.0..=3.0]));
+    /// assert!(!tree.is_empty());
+    /// ```
     pub fn insert(&mut self, id: TupleIdentifier, bb: BoundingBox<T, N>) {
         // Citing https://iq.opengenus.org/r-tree/
         //
@@ -63,9 +94,12 @@ where
         let split_node = {
             let leaf_node = self.node_at_path_mut(&leaf_path.node_indices);
             match &mut leaf_node.node_data {
-                NodeData::Leaf(leaves) => {
-                    Self::insert_into_leaf_node(&split_strategy, leaves, leaf_path.leaf_index, entry)
-                }
+                NodeData::Leaf(leaves) => Self::insert_into_leaf_node(
+                    &split_strategy,
+                    leaves,
+                    leaf_path.leaf_index,
+                    entry,
+                ),
                 NodeData::NonLeaf(_) => {
                     unreachable!("choose_leaf always descends to a leaf-level node")
                 }
@@ -83,6 +117,20 @@ where
     }
 
     /// Finds entries whose bounding boxes intersect the query box.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 0.0..=1.0]));
+    /// tree.insert(2, BoundingBox::from([2.0..=3.0, 2.0..=3.0]));
+    ///
+    /// let hits = tree.query_intersects(&BoundingBox::from([0.5..=2.5, 0.5..=2.5]));
+    /// let mut ids: Vec<_> = hits.iter().map(|entry| entry.id).collect();
+    /// ids.sort();
+    /// assert_eq!(ids, vec![1, 2]);
+    /// ```
     pub fn query_intersects<'a>(
         &'a self,
         bb: &BoundingBox<T, N>,
@@ -91,6 +139,56 @@ where
     }
 
     /// Finds entries whose bounding boxes intersect the query element.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::intersections::IntersectsWith;
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// struct Ray2 {
+    ///     origin: [f32; 2],
+    ///     inv_dir: [f32; 2],
+    /// }
+    ///
+    /// impl Ray2 {
+    ///     fn new(origin: [f32; 2], dir: [f32; 2]) -> Self {
+    ///         Self {
+    ///             origin,
+    ///             inv_dir: [1.0 / dir[0], 1.0 / dir[1]],
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// impl IntersectsWith<BoundingBox<f32, 2>> for Ray2 {
+    ///     fn intersects_with(&self, other: &BoundingBox<f32, 2>) -> bool {
+    ///         let mut tmin = f32::NEG_INFINITY;
+    ///         let mut tmax = f32::INFINITY;
+    ///         for i in 0..2 {
+    ///             let start = other.dims[i].start;
+    ///             let end = other.dims[i].end;
+    ///             let t1 = (start - self.origin[i]) * self.inv_dir[i];
+    ///             let t2 = (end - self.origin[i]) * self.inv_dir[i];
+    ///             let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+    ///             tmin = tmin.max(t1);
+    ///             tmax = tmax.min(t2);
+    ///             if tmin > tmax {
+    ///                 return false;
+    ///             }
+    ///         }
+    ///         tmax >= 0.0
+    ///     }
+    /// }
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 0.0..=1.0]));
+    /// tree.insert(2, BoundingBox::from([2.0..=3.0, 0.0..=1.0]));
+    ///
+    /// let ray = Ray2::new([-1.0, 0.5], [1.0, 0.0]);
+    /// let hits = tree.query_intersects_generic(&ray);
+    /// let mut ids: Vec<_> = hits.iter().map(|entry| entry.id).collect();
+    /// ids.sort();
+    /// assert_eq!(ids, vec![1, 2]);
+    /// ```
     pub fn query_intersects_generic<'a, Q>(
         &'a self,
         element: &Q,
@@ -104,6 +202,29 @@ where
     }
 
     /// Calls a function for each entry whose bounding box intersects the query element.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::intersections::IntersectsWith;
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// struct Query;
+    ///
+    /// impl IntersectsWith<BoundingBox<f32, 2>> for Query {
+    ///     fn intersects_with(&self, other: &BoundingBox<f32, 2>) -> bool {
+    ///         other.dims[0].start <= 0.5 && 0.5 <= other.dims[0].end
+    ///     }
+    /// }
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 0.0..=1.0]));
+    /// tree.insert(2, BoundingBox::from([2.0..=3.0, 0.0..=1.0]));
+    ///
+    /// let mut ids = Vec::new();
+    /// tree.query_intersects_generic_fn(&Query, |entry| ids.push(entry.id));
+    /// ids.sort();
+    /// assert_eq!(ids, vec![1]);
+    /// ```
     pub fn query_intersects_generic_fn<'a, Q, F>(&'a self, element: &Q, mut candidate_fn: F)
     where
         Q: IntersectsWith<BoundingBox<T, N>>,
@@ -113,6 +234,20 @@ where
     }
 
     /// Finds entries whose bounding boxes are fully contained by the query box.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 0.0..=1.0]));
+    /// tree.insert(2, BoundingBox::from([2.0..=3.0, 2.0..=3.0]));
+    ///
+    /// let hits = tree.query_contains(&BoundingBox::from([0.0..=2.5, 0.0..=2.5]));
+    /// let mut ids: Vec<_> = hits.iter().map(|entry| entry.id).collect();
+    /// ids.sort();
+    /// assert_eq!(ids, vec![1]);
+    /// ```
     pub fn query_contains<'a>(
         &'a self,
         bb: &BoundingBox<T, N>,
@@ -122,10 +257,23 @@ where
         matches
     }
 
+    /// Removes an entry by id and exact bounding box.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// let bb = BoundingBox::from([0.0..=1.0, 0.0..=1.0]);
+    /// tree.insert(1, bb.clone());
+    /// assert!(tree.remove(&1, &bb));
+    /// assert!(tree.is_empty());
+    /// ```
     pub fn remove(&mut self, id: &TupleIdentifier, bb: &BoundingBox<T, N>) -> bool
     where
         TupleIdentifier: PartialEq,
     {
+        // Removal matches on both identifier and exact bounding box.
         let Some(path) = self.find_leaf_entry_path(id, bb) else {
             return false;
         };
@@ -151,6 +299,19 @@ where
         true
     }
 
+    /// Bulk-load entries using the default `STR` strategy.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let items = vec![
+    ///     (1, BoundingBox::from([0.0..=1.0, 0.0..=1.0])),
+    ///     (2, BoundingBox::from([2.0..=3.0, 2.0..=3.0])),
+    /// ];
+    /// let tree: RTree<f32, 2, 4> = RTree::bulk_load(items);
+    /// assert!(!tree.is_empty());
+    /// ```
     pub fn bulk_load<I>(entries: I) -> Self
     where
         I: IntoIterator<Item = (TupleIdentifier, BoundingBox<T, N>)>,
@@ -158,6 +319,7 @@ where
         Self::bulk_load_with_strategy(entries, BulkLoadStrategy::Str)
     }
 
+    /// Bulk-load entries with an explicit strategy.
     pub fn bulk_load_with_strategy<I>(entries: I, strategy: BulkLoadStrategy) -> Self
     where
         I: IntoIterator<Item = (TupleIdentifier, BoundingBox<T, N>)>,
@@ -169,6 +331,7 @@ where
         Self::bulk_load_entries_with_strategy(items, strategy)
     }
 
+    /// Bulk-load pre-built entries using the default `STR` strategy.
     pub fn bulk_load_entries<I>(entries: I) -> Self
     where
         I: IntoIterator<Item = IndexRecordEntry<T, N, TupleIdentifier>>,
@@ -176,10 +339,12 @@ where
         Self::bulk_load_entries_with_strategy(entries, BulkLoadStrategy::Str)
     }
 
+    /// Bulk-load pre-built entries with an explicit strategy.
     pub fn bulk_load_entries_with_strategy<I>(entries: I, strategy: BulkLoadStrategy) -> Self
     where
         I: IntoIterator<Item = IndexRecordEntry<T, N, TupleIdentifier>>,
     {
+        // STR constructs a balanced tree in a bottom-up manner.
         let mut entries = entries.into_iter().collect::<Vec<_>>();
         if entries.is_empty() {
             return Self::default();
@@ -214,16 +379,30 @@ where
         }
     }
 
+    /// Finds the nearest entry to the provided point.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::{BoundingBox, RTree};
+    ///
+    /// let mut tree: RTree<f32, 2, 4> = RTree::default();
+    /// tree.insert(1, BoundingBox::from([0.0..=1.0, 0.0..=1.0]));
+    /// tree.insert(2, BoundingBox::from([2.0..=3.0, 2.0..=3.0]));
+    ///
+    /// let nearest = tree.nearest_neighbor([0.1, 0.2]).expect("nearest");
+    /// assert_eq!(nearest.id, 1);
+    /// ```
     pub fn nearest_neighbor(
         &self,
         point: [T; N],
     ) -> Option<&IndexRecordEntry<T, N, TupleIdentifier>> {
+        // Prunes branches whose bounding boxes are farther than the current best.
         let mut best: Option<(&IndexRecordEntry<T, N, TupleIdentifier>, T)> = None;
         self.nearest_in_node(&self.root, &point, &mut best);
         best.map(|(entry, _)| entry)
     }
 
-    /// Select a leaf node in which to place a new entry.
+    /// Selects a leaf node in which to place a new entry.
     fn choose_leaf(&self, bb: &BoundingBox<T, N>) -> LeafPath {
         // Citing https://iq.opengenus.org/r-tree/
         //
@@ -262,6 +441,7 @@ where
         }
     }
 
+    /// Finds the path to a specific entry by id and bounding box.
     fn find_leaf_entry_path(
         &self,
         id: &TupleIdentifier,
@@ -274,6 +454,7 @@ where
         self.find_leaf_entry_path_in_node(&self.root, id, bb, &mut node_path)
     }
 
+    /// Recursive helper for locating a specific entry in a subtree.
     fn find_leaf_entry_path_in_node(
         &self,
         node: &RTreeNode<T, N, M, TupleIdentifier>,
@@ -286,6 +467,7 @@ where
     {
         match &node.node_data {
             NodeData::Leaf(children) => {
+                // Leaf-level scan: match by id and exact bounding box.
                 for (leaf_idx, child) in children.iter().enumerate() {
                     if !child.bb.contains(bb) {
                         continue;
@@ -320,6 +502,7 @@ where
         }
     }
 
+    /// Adjusts parent bounding boxes and handles split propagation upward.
     fn adjust_tree(
         &mut self,
         node_path: &[usize],
@@ -352,6 +535,7 @@ where
 
             match &mut parent.node_data {
                 NodeData::NonLeaf(children) => {
+                    // Update the bounding box of the child we just modified.
                     {
                         let child = &mut children[child_index];
                         child.recompute_bb();
@@ -367,8 +551,10 @@ where
                             children.push(new_child);
                             split_node = None;
                         } else {
+                            // Parent overflow: split and propagate upward.
                             let parent_bb = children.as_slice().to_bb();
-                            let split_result = split_strategy.split(&parent_bb, children, new_child);
+                            let split_result =
+                                split_strategy.split(&parent_bb, children, new_child);
                             let second_entries = split_result.second.entries;
                             *children = split_result.first.entries;
                             split_node = Some(RTreeNode {
@@ -386,11 +572,21 @@ where
         split_node
     }
 
+    /// Returns `true` if the tree contains no entries.
+    ///
+    /// # Example
+    /// ```
+    /// use space_partitioning::rtree::RTree;
+    ///
+    /// let tree: RTree<f32, 2, 4> = RTree::default();
+    /// assert!(tree.is_empty());
+    /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.root.is_empty()
     }
 
+    /// Returns a mutable node reference for a path of child indices from the root.
     fn node_at_path_mut(
         &mut self,
         node_path: &[usize],
@@ -406,6 +602,7 @@ where
         current
     }
 
+    /// Condenses the tree after deletions, returning entries to reinsert.
     fn condense_tree(
         &mut self,
         node_path: &[usize],
@@ -421,6 +618,7 @@ where
             match &mut parent.node_data {
                 NodeData::NonLeaf(children) => {
                     if children[child_index].pointer.is_underfull() {
+                        // Remove underfull subtree and reinsert its entries.
                         let removed = children.remove(child_index);
                         reinsert.extend(Self::collect_entries_from_node(*removed.pointer));
                     } else {
@@ -437,11 +635,13 @@ where
         reinsert
     }
 
+    /// Collapses the root if it has a single child.
     fn condense_root(&mut self) {
         loop {
             match &mut self.root.node_data {
                 NodeData::NonLeaf(children) => {
                     if children.len() == 1 {
+                        // Collapse a single-child root to keep the tree shallow.
                         let only = children.remove(0);
                         self.root = *only.pointer;
                         continue;
@@ -453,11 +653,13 @@ where
         }
     }
 
+    /// Chooses the child that minimizes area enlargement for insertion.
     fn choose_child_index<TNode>(
         children: &[ChildPointer<T, N, TNode>],
         bb: &BoundingBox<T, N>,
     ) -> usize {
         debug_assert!(!children.is_empty());
+        // Choose the child that requires the least area enlargement.
         let mut best_idx = 0;
         let mut best = children[0].bb.get_grown(bb);
 
@@ -474,6 +676,7 @@ where
         best_idx
     }
 
+    /// Traverses nodes and collects entries intersecting a generic query element.
     fn query_node_intersects_generic<'a, Q>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
@@ -505,6 +708,7 @@ where
         }
     }
 
+    /// Traverses nodes and calls back for each entry intersecting a query element.
     fn query_node_intersects_generic_fn<'a, Q, F>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
@@ -530,13 +734,18 @@ where
             NodeData::NonLeaf(children) => {
                 for child in children.iter() {
                     if element.intersects_with(&child.bb) {
-                        self.query_node_intersects_generic_fn(&child.pointer, element, candidate_fn);
+                        self.query_node_intersects_generic_fn(
+                            &child.pointer,
+                            element,
+                            candidate_fn,
+                        );
                     }
                 }
             }
         }
     }
 
+    /// Traverses nodes and collects entries fully contained in a query box.
     fn query_node_contains<'a>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
@@ -574,6 +783,7 @@ where
         }
     }
 
+    /// Collects all entries in a subtree.
     fn collect_all_entries<'a>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
@@ -593,6 +803,7 @@ where
         }
     }
 
+    /// Collects owned entries from a node, consuming the subtree.
     fn collect_entries_from_node(
         node: RTreeNode<T, N, M, TupleIdentifier>,
     ) -> Vec<IndexRecordEntry<T, N, TupleIdentifier>> {
@@ -612,15 +823,14 @@ where
         entries
     }
 
+    /// Inserts an entry into a leaf-level node, splitting if needed.
     fn insert_into_leaf_node(
         split_strategy: &LinearCostSplitting,
-        leaves: &mut ArrayVec<
-            ChildPointer<T, N, RTreeLeaf<T, N, M, TupleIdentifier>>,
-            M,
-        >,
+        leaves: &mut ArrayVec<ChildPointer<T, N, RTreeLeaf<T, N, M, TupleIdentifier>>, M>,
         leaf_index: Option<usize>,
         entry: IndexRecordEntry<T, N, TupleIdentifier>,
     ) -> Option<RTreeNode<T, N, M, TupleIdentifier>> {
+        // If the leaf-level node has no children yet, create a new leaf child.
         let idx = match leaf_index {
             Some(idx) => idx,
             None => {
@@ -659,6 +869,7 @@ where
             return None;
         }
 
+        // Leaf-level node overflow: split and return a new sibling node.
         let parent_bb = leaves.as_slice().to_bb();
         let split = split_strategy.split(&parent_bb, leaves, new_child);
         let second_entries = split.second.entries;
@@ -668,13 +879,11 @@ where
         })
     }
 
+    /// Builds leaf children from entries using STR ordering.
     fn build_leaf_children(
         entries: &mut Vec<IndexRecordEntry<T, N, TupleIdentifier>>,
     ) -> Vec<ChildPointer<T, N, RTreeLeaf<T, N, M, TupleIdentifier>>> {
-        let ordered = Self::str_order(
-            std::mem::take(entries),
-            &|entry| &entry.bb,
-        );
+        let ordered = Self::str_order(std::mem::take(entries), &|entry| &entry.bb);
 
         let mut iter = ordered.into_iter();
         let mut leaves = Vec::new();
@@ -697,9 +906,11 @@ where
         leaves
     }
 
+    /// Groups leaf children into leaf-level nodes.
     fn build_leaf_level_nodes(
         leaves: Vec<ChildPointer<T, N, RTreeLeaf<T, N, M, TupleIdentifier>>>,
     ) -> Vec<RTreeNode<T, N, M, TupleIdentifier>> {
+        // Group leaf children into leaf-level nodes after STR ordering.
         let ordered = Self::str_order(leaves, &|child| &child.bb);
         let mut iter = ordered.into_iter();
         let mut nodes = Vec::new();
@@ -721,9 +932,11 @@ where
         nodes
     }
 
+    /// Groups nodes into non-leaf parent nodes.
     fn build_non_leaf_level_nodes(
         nodes: Vec<ChildPointer<T, N, RTreeNode<T, N, M, TupleIdentifier>>>,
     ) -> Vec<RTreeNode<T, N, M, TupleIdentifier>> {
+        // Build parent levels bottom-up using the same STR ordering.
         let ordered = Self::str_order(nodes, &|child| &child.bb);
         let mut iter = ordered.into_iter();
         let mut parents = Vec::new();
@@ -745,23 +958,23 @@ where
         parents
     }
 
+    /// Orders entries using Sort-Tile-Recursive (STR).
     fn str_order<TEntry>(
         entries: Vec<TEntry>,
         bb_of: &impl Fn(&TEntry) -> &BoundingBox<T, N>,
     ) -> Vec<TEntry> {
+        // Sort-Tile-Recursive ordering: spatially sort to improve bulk-load locality.
         let count = entries.len();
         if count <= 1 {
             return entries;
         }
 
-        let num_groups = (count + M - 1) / M;
-        let slice_count = (num_groups as f64)
-            .powf(1.0 / N as f64)
-            .ceil()
-            .max(1.0) as usize;
+        let num_groups = count.div_ceil(M);
+        let slice_count = (num_groups as f64).powf(1.0 / N as f64).ceil().max(1.0) as usize;
         Self::str_order_axis(entries, 0, slice_count, bb_of)
     }
 
+    /// STR ordering along a specific axis, recursing over dimensions.
     fn str_order_axis<TEntry>(
         mut entries: Vec<TEntry>,
         axis: usize,
@@ -771,16 +984,14 @@ where
         entries.sort_by(|a, b| {
             let a_center = Self::bb_center_axis(bb_of(a), axis);
             let b_center = Self::bb_center_axis(bb_of(b), axis);
-            a_center
-                .partial_cmp(&b_center)
-                .unwrap_or(Ordering::Equal)
+            a_center.partial_cmp(&b_center).unwrap_or(Ordering::Equal)
         });
 
         if axis + 1 >= N || entries.len() <= M {
             return entries;
         }
 
-        let slice_len = (entries.len() + slice_count - 1) / slice_count;
+        let slice_len = entries.len().div_ceil(slice_count);
         let mut ordered = Vec::with_capacity(entries.len());
         let mut remaining = entries;
         while !remaining.is_empty() {
@@ -792,11 +1003,13 @@ where
         ordered
     }
 
+    /// Returns the center coordinate of a bounding box along an axis.
     fn bb_center_axis(bb: &BoundingBox<T, N>, axis: usize) -> T {
         let two = T::one() + T::one();
         (bb.dims[axis].start + bb.dims[axis].end) / two
     }
 
+    /// Recursive nearest-neighbor search with pruning.
     fn nearest_in_node<'a>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
@@ -824,6 +1037,7 @@ where
                 }
             }
             NodeData::NonLeaf(children) => {
+                // Explore children in order of increasing distance to prune earlier.
                 let mut ordered = children
                     .iter()
                     .map(|child| (child.bb.distance2_to_point(point), child))
@@ -842,8 +1056,10 @@ where
         }
     }
 
+    /// Replaces the root with a new parent containing the old root and split node.
     fn grow_root(&mut self, split_node: RTreeNode<T, N, M, TupleIdentifier>) {
-        let old_root = std::mem::replace(&mut self.root, RTreeNode::default());
+        // Replace the root with a new parent that references the old and new nodes.
+        let old_root = std::mem::take(&mut self.root);
         let mut children: ArrayVec<_, M> = ArrayVec::new();
         children.push(ChildPointer {
             bb: old_root.to_bb(),
