@@ -103,7 +103,7 @@ impl CenteredAABB {
             half_height: hy,
         };
 
-        [self.clone(), top_left, top_right, bottom_left, bottom_right]
+        [*self, top_left, top_right, bottom_left, bottom_right]
     }
 
     #[inline]
@@ -177,10 +177,10 @@ impl CenteredAABB {
     }
 }
 
-impl Into<AABB> for CenteredAABB {
+impl From<CenteredAABB> for AABB {
     #[inline]
-    fn into(self) -> AABB {
-        self.get_aabb()
+    fn from(val: CenteredAABB) -> Self {
+        val.get_aabb()
     }
 }
 

@@ -50,11 +50,7 @@ where
     type Item = &'a IntervalTreeEntry<T, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.root.is_none() {
-            return None;
-        }
-
-        let root = self.root.unwrap();
+        let root = self.root?;
 
         loop {
             match &mut self.current_state {
@@ -102,12 +98,13 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        if self.root.is_none() {
-            return (0, None);
+        match self.root {
+            Some(root) => {
+                let size = root.len();
+                (size, Some(size))
+            }
+            None => (0, None),
         }
-
-        let size = self.root.unwrap().len();
-        return (size, Some(size));
     }
 
     fn count(self) -> usize
@@ -122,14 +119,10 @@ where
     }
 
     fn last(self) -> Option<Self::Item> {
-        if self.root.is_none() {
-            return None;
-        }
+        let mut token = self.root?;
 
-        let mut token = self.root.unwrap();
-
-        while token.right.is_some() {
-            token = token.right.as_ref().unwrap();
+        while let Some(right) = token.right.as_ref() {
+            token = right;
         }
 
         Some(&token.entry)
@@ -154,15 +147,13 @@ where
             F: FnMut(&'a IntervalTreeEntry<T, D>),
             T: IntervalType,
         {
-            if node.is_none() {
-                return;
+            if let Some(node) = node.as_ref() {
+                inorder(node, f);
             }
-
-            inorder(&node.as_ref().unwrap(), f);
         }
 
         if let Some(root) = self.root {
-            inorder(&root, &mut f);
+            inorder(root, &mut f);
         }
     }
 }

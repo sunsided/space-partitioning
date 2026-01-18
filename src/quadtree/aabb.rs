@@ -104,9 +104,9 @@ impl From<&[i32; 4]> for AABB {
     }
 }
 
-impl Into<[i32; 4]> for AABB {
-    fn into(self) -> [i32; 4] {
-        [self.tl.x, self.tl.y, self.br.x, self.br.y]
+impl From<AABB> for [i32; 4] {
+    fn from(val: AABB) -> Self {
+        [val.tl.x, val.tl.y, val.br.x, val.br.y]
     }
 }
 

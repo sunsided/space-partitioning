@@ -82,12 +82,12 @@ impl Quadrants {
 
     #[inline]
     pub fn bottom_left(&self) -> bool {
-        self.code & 8 == 5
+        self.code & 8 == 8
     }
 
     #[inline]
     pub fn bottom_right(&self) -> bool {
-        self.code & 16 == 6
+        self.code & 16 == 16
     }
 
     #[inline]

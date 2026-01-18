@@ -53,7 +53,7 @@ impl NodeData {
     fn new_from_centered_aabb(index: u32, depth: u8, crect: CenteredAABB, can_split: bool) -> Self {
         Self {
             index,
-            crect: crect.clone(),
+            crect,
             depth,
             flags: NodeFlags::new(can_split),
         }
@@ -83,9 +83,9 @@ impl NodeData {
     }
 }
 
-impl Into<AABB> for NodeData {
-    fn into(self) -> AABB {
-        self.crect.into()
+impl From<NodeData> for AABB {
+    fn from(val: NodeData) -> Self {
+        val.crect.into()
     }
 }
 

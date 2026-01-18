@@ -53,7 +53,7 @@ where
             self.length += 1;
         }
 
-        return if self.first_free != SENTINEL {
+        if self.first_free != SENTINEL {
             let index = self.first_free;
 
             // Set the "first free" pointer to the next free index.
@@ -68,7 +68,7 @@ where
             };
             self.data.push(fe);
             (self.data.len() - 1) as IndexType
-        };
+        }
     }
 
     /// Removes the nth element from the free list.
@@ -189,7 +189,7 @@ where
                 }
                 token = unsafe { self.data[token as usize].next };
             }
-            return false;
+            false
         }
         #[cfg(not(any(debug_assertions, test)))]
         unimplemented!()

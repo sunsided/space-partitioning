@@ -26,8 +26,22 @@ path = "examples/quadtree_noviz.rs"
 name = "bench_quadtree"
 harness = false
 
+[[bench]]
+name = "bench_rtree"
+harness = false
+
+[[bench]]
+name = "bench_compare_3d"
+harness = false
+
+[[bench]]
+name = "bench_compare_2d"
+harness = false
+
 [dependencies]
 smallvec = { version = "1.6.1", features = ["union", "const_generics"] }
+num-traits = "0.2.14"
+arrayvec = "0.7.2"
 
 # Build all dependencies (but not this workspace) with optimizations enabled.
 [profile.dev.package."*"]
@@ -38,3 +52,4 @@ rand = "0.8.4"
 piston_window = "0.120.0"
 criterion = "0.3.4"
 indicatif = "0.16.2"
+console = { version = "0.16.2", features = ["std"] }
