@@ -1,3 +1,4 @@
+use crate::intersections::IntersectsWith;
 use crate::rtree::bounding_box::BoundingBox;
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::node_traits::HasBoundingBox;
@@ -86,9 +87,29 @@ where
         &'a self,
         bb: &BoundingBox<T, N>,
     ) -> Vec<&'a IndexRecordEntry<T, N, TupleIdentifier>> {
+        self.query_intersects_generic(bb)
+    }
+
+    /// Finds entries whose bounding boxes intersect the query element.
+    pub fn query_intersects_generic<'a, Q>(
+        &'a self,
+        element: &Q,
+    ) -> Vec<&'a IndexRecordEntry<T, N, TupleIdentifier>>
+    where
+        Q: IntersectsWith<BoundingBox<T, N>>,
+    {
         let mut matches = Vec::new();
-        self.query_node_intersects(&self.root, bb, &mut matches);
+        self.query_node_intersects_generic(&self.root, element, &mut matches);
         matches
+    }
+
+    /// Calls a function for each entry whose bounding box intersects the query element.
+    pub fn query_intersects_generic_fn<'a, Q, F>(&'a self, element: &Q, mut candidate_fn: F)
+    where
+        Q: IntersectsWith<BoundingBox<T, N>>,
+        F: FnMut(&'a IndexRecordEntry<T, N, TupleIdentifier>),
+    {
+        self.query_node_intersects_generic_fn(&self.root, element, &mut candidate_fn);
     }
 
     /// Finds entries whose bounding boxes are fully contained by the query box.
@@ -453,20 +474,22 @@ where
         best_idx
     }
 
-    fn query_node_intersects<'a>(
+    fn query_node_intersects_generic<'a, Q>(
         &'a self,
         node: &'a RTreeNode<T, N, M, TupleIdentifier>,
-        bb: &BoundingBox<T, N>,
+        element: &Q,
         matches: &mut Vec<&'a IndexRecordEntry<T, N, TupleIdentifier>>,
-    ) {
+    ) where
+        Q: IntersectsWith<BoundingBox<T, N>>,
+    {
         match &node.node_data {
             NodeData::Leaf(children) => {
                 for child in children.iter() {
-                    if !child.bb.intersects(bb) {
+                    if !element.intersects_with(&child.bb) {
                         continue;
                     }
                     for entry in child.pointer.entries.iter() {
-                        if entry.bb.intersects(bb) {
+                        if element.intersects_with(&entry.bb) {
                             matches.push(entry);
                         }
                     }
@@ -474,8 +497,40 @@ where
             }
             NodeData::NonLeaf(children) => {
                 for child in children.iter() {
-                    if child.bb.intersects(bb) {
-                        self.query_node_intersects(&child.pointer, bb, matches);
+                    if element.intersects_with(&child.bb) {
+                        self.query_node_intersects_generic(&child.pointer, element, matches);
+                    }
+                }
+            }
+        }
+    }
+
+    fn query_node_intersects_generic_fn<'a, Q, F>(
+        &'a self,
+        node: &'a RTreeNode<T, N, M, TupleIdentifier>,
+        element: &Q,
+        candidate_fn: &mut F,
+    ) where
+        Q: IntersectsWith<BoundingBox<T, N>>,
+        F: FnMut(&'a IndexRecordEntry<T, N, TupleIdentifier>),
+    {
+        match &node.node_data {
+            NodeData::Leaf(children) => {
+                for child in children.iter() {
+                    if !element.intersects_with(&child.bb) {
+                        continue;
+                    }
+                    for entry in child.pointer.entries.iter() {
+                        if element.intersects_with(&entry.bb) {
+                            candidate_fn(entry);
+                        }
+                    }
+                }
+            }
+            NodeData::NonLeaf(children) => {
+                for child in children.iter() {
+                    if element.intersects_with(&child.bb) {
+                        self.query_node_intersects_generic_fn(&child.pointer, element, candidate_fn);
                     }
                 }
             }
@@ -819,6 +874,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::intersections::IntersectsWith;
 
     #[test]
     fn default_works() {
@@ -893,5 +949,58 @@ mod test {
         ids.sort();
 
         assert_eq!(ids, vec![0, 1, 3]);
+    }
+
+    struct Ray2 {
+        origin: [f32; 2],
+        inv_dir: [f32; 2],
+    }
+
+    impl Ray2 {
+        fn new(origin: [f32; 2], dir: [f32; 2]) -> Self {
+            Self {
+                origin,
+                inv_dir: [1.0 / dir[0], 1.0 / dir[1]],
+            }
+        }
+    }
+
+    impl IntersectsWith<BoundingBox<f32, 2>> for Ray2 {
+        fn intersects_with(&self, other: &BoundingBox<f32, 2>) -> bool {
+            let mut tmin = f32::NEG_INFINITY;
+            let mut tmax = f32::INFINITY;
+
+            for i in 0..2 {
+                let start = other.dims[i].start;
+                let end = other.dims[i].end;
+                let t1 = (start - self.origin[i]) * self.inv_dir[i];
+                let t2 = (end - self.origin[i]) * self.inv_dir[i];
+                let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+                tmin = tmin.max(t1);
+                tmax = tmax.min(t2);
+                if tmin > tmax {
+                    return false;
+                }
+            }
+
+            tmax >= 0.0
+        }
+    }
+
+    #[test]
+    fn query_intersects_generic_works() {
+        let mut tree = RTree::<f32, 2, 2>::default();
+        tree.insert(0, [0.0..=1.0, 0.0..=1.0].into());
+        tree.insert(1, [2.0..=3.0, 2.0..=3.0].into());
+        tree.insert(2, [4.0..=5.0, 4.0..=5.0].into());
+        tree.insert(3, [1.0..=2.0, 0.0..=1.0].into());
+
+        let ray = Ray2::new([-1.0, 0.5], [1.0, 0.0]);
+        let results = tree.query_intersects_generic(&ray);
+        let mut ids: Vec<_> = results.iter().map(|entry| entry.id).collect();
+        ids.sort();
+
+        assert_eq!(ids, vec![0, 3]);
     }
 }

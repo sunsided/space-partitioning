@@ -3,6 +3,7 @@ use criterion::{
 };
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{AABB, QuadRect, QuadTreeElement};
 use space_partitioning::rtree::{BoundingBox, RTree};
 use space_partitioning::QuadTree;
@@ -20,9 +21,77 @@ struct Rect2D {
     half_size: [i32; 2],
 }
 
+#[derive(Clone, Copy)]
+struct Ray2 {
+    origin: [f32; 2],
+    inv_dir: [f32; 2],
+}
+
+impl Ray2 {
+    fn new(origin: [f32; 2], dir: [f32; 2]) -> Self {
+        Self {
+            origin,
+            inv_dir: [1.0 / dir[0], 1.0 / dir[1]],
+        }
+    }
+}
+
+impl IntersectsWith<AABB> for Ray2 {
+    fn intersects_with(&self, other: &AABB) -> bool {
+        let min_x = other.tl.x as f32;
+        let max_x = other.br.x as f32;
+        let min_y = other.tl.y as f32;
+        let max_y = other.br.y as f32;
+
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
+
+        let t1 = (min_x - self.origin[0]) * self.inv_dir[0];
+        let t2 = (max_x - self.origin[0]) * self.inv_dir[0];
+        let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+        tmin = tmin.max(t1);
+        tmax = tmax.min(t2);
+
+        let t3 = (min_y - self.origin[1]) * self.inv_dir[1];
+        let t4 = (max_y - self.origin[1]) * self.inv_dir[1];
+        let (t3, t4) = if t3 < t4 { (t3, t4) } else { (t4, t3) };
+        tmin = tmin.max(t3);
+        tmax = tmax.min(t4);
+
+        if tmin > tmax {
+            return false;
+        }
+        tmax >= 0.0
+    }
+}
+
+impl IntersectsWith<BoundingBox<f32, 2>> for Ray2 {
+    fn intersects_with(&self, other: &BoundingBox<f32, 2>) -> bool {
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
+
+        for i in 0..2 {
+            let start = other.dims[i].start;
+            let end = other.dims[i].end;
+            let t1 = (start - self.origin[i]) * self.inv_dir[i];
+            let t2 = (end - self.origin[i]) * self.inv_dir[i];
+            let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmin > tmax {
+                return false;
+            }
+        }
+
+        tmax >= 0.0
+    }
+}
+
 struct BenchData {
     rects: Vec<Rect2D>,
     queries: Vec<Rect2D>,
+    rays: Vec<Ray2>,
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -46,6 +115,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         bench_query_quadtree(&mut query_group, data);
     }
     query_group.finish();
+
+    let mut ray_group = c.benchmark_group("compare_2d_query_rays");
+    for data in &datasets {
+        bench_query_rtree_ray(&mut ray_group, data);
+        bench_query_quadtree_ray(&mut ray_group, data);
+    }
+    ray_group.finish();
 }
 
 fn bench_insert_rtree(
@@ -135,6 +211,38 @@ fn bench_query_quadtree(
     });
 }
 
+fn bench_query_rtree_ray(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_rtree(data);
+    group.bench_function(BenchmarkId::new("rtree", data.rects.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for ray in &data.rays {
+                hits += tree.query_intersects_generic(ray).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
+fn bench_query_quadtree_ray(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_quadtree(data);
+    group.bench_function(BenchmarkId::new("quadtree", data.rects.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for ray in &data.rays {
+                hits += tree.intersect_generic(ray).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
 fn build_rtree(data: &BenchData) -> RTree<f32, 2, 16, u32> {
     let mut tree: RTree<f32, 2, 16, u32> = RTree::default();
     for rect in &data.rects {
@@ -162,7 +270,13 @@ fn build_data(seed: u64, count: usize) -> BenchData {
     let rects = build_rects(seed, count, 2..50);
     let queries = build_rects(seed ^ 0x77, 256, 25..120);
 
-    BenchData { rects, queries }
+    let rays = build_rays(seed ^ 0x55, 256);
+
+    BenchData {
+        rects,
+        queries,
+        rays,
+    }
 }
 
 fn build_rects(seed: u64, count: usize, size_range: std::ops::Range<i32>) -> Vec<Rect2D> {
@@ -198,6 +312,32 @@ fn rect_to_quadtree_aabb(rect: Rect2D) -> AABB {
     let min_y = clamp_i32(rect.center[1] - rect.half_size[1]);
     let max_y = clamp_i32(rect.center[1] + rect.half_size[1]);
     AABB::new(min_x, min_y, max_x, max_y)
+}
+
+fn build_rays(seed: u64, count: usize) -> Vec<Ray2> {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rays = Vec::with_capacity(count);
+    for _ in 0..count {
+        let origin = [
+            rng.gen_range(SPACE_MIN..SPACE_MAX) as f32,
+            rng.gen_range(SPACE_MIN..SPACE_MAX) as f32,
+        ];
+        let dir = [
+            random_non_zero_dir(&mut rng) as f32,
+            random_non_zero_dir(&mut rng) as f32,
+        ];
+        rays.push(Ray2::new(origin, dir));
+    }
+    rays
+}
+
+fn random_non_zero_dir(rng: &mut StdRng) -> i32 {
+    loop {
+        let value = rng.gen_range(-100..=100);
+        if value != 0 {
+            return value;
+        }
+    }
 }
 
 fn clamp_i32(value: i32) -> i32 {

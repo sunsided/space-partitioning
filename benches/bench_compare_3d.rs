@@ -3,6 +3,7 @@ use criterion::{
 };
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use space_partitioning::intersections::IntersectsWith;
 use space_partitioning::quadtree::{AABB, QuadRect, QuadTreeElement};
 use space_partitioning::rtree::{BoundingBox, RTree};
 use space_partitioning::QuadTree;
@@ -21,9 +22,93 @@ struct Sphere {
     radius: i32,
 }
 
+#[derive(Clone, Copy)]
+struct Ray2 {
+    origin: [f32; 2],
+    inv_dir: [f32; 2],
+}
+
+impl Ray2 {
+    fn new(origin: [f32; 2], dir: [f32; 2]) -> Self {
+        Self {
+            origin,
+            inv_dir: [1.0 / dir[0], 1.0 / dir[1]],
+        }
+    }
+}
+
+impl IntersectsWith<AABB> for Ray2 {
+    fn intersects_with(&self, other: &AABB) -> bool {
+        let min_x = other.tl.x as f32;
+        let max_x = other.br.x as f32;
+        let min_y = other.tl.y as f32;
+        let max_y = other.br.y as f32;
+
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
+
+        let t1 = (min_x - self.origin[0]) * self.inv_dir[0];
+        let t2 = (max_x - self.origin[0]) * self.inv_dir[0];
+        let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+        tmin = tmin.max(t1);
+        tmax = tmax.min(t2);
+
+        let t3 = (min_y - self.origin[1]) * self.inv_dir[1];
+        let t4 = (max_y - self.origin[1]) * self.inv_dir[1];
+        let (t3, t4) = if t3 < t4 { (t3, t4) } else { (t4, t3) };
+        tmin = tmin.max(t3);
+        tmax = tmax.min(t4);
+
+        if tmin > tmax {
+            return false;
+        }
+        tmax >= 0.0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Ray3 {
+    origin: [f32; 3],
+    inv_dir: [f32; 3],
+}
+
+impl Ray3 {
+    fn new(origin: [f32; 3], dir: [f32; 3]) -> Self {
+        Self {
+            origin,
+            inv_dir: [1.0 / dir[0], 1.0 / dir[1], 1.0 / dir[2]],
+        }
+    }
+}
+
+impl IntersectsWith<BoundingBox<f32, 3>> for Ray3 {
+    fn intersects_with(&self, other: &BoundingBox<f32, 3>) -> bool {
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
+
+        for i in 0..3 {
+            let start = other.dims[i].start;
+            let end = other.dims[i].end;
+            let t1 = (start - self.origin[i]) * self.inv_dir[i];
+            let t2 = (end - self.origin[i]) * self.inv_dir[i];
+            let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmin > tmax {
+                return false;
+            }
+        }
+
+        tmax >= 0.0
+    }
+}
+
 struct BenchData {
     spheres: Vec<Sphere>,
     queries: Vec<Sphere>,
+    rays_2d: Vec<Ray2>,
+    rays_3d: Vec<Ray3>,
     z_range: (i32, i32),
 }
 
@@ -48,6 +133,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         bench_query_quadtree(&mut query_group, data);
     }
     query_group.finish();
+
+    let mut ray_group = c.benchmark_group("compare_3d_query_rays");
+    for data in &datasets {
+        bench_query_rtree_ray(&mut ray_group, data);
+        bench_query_quadtree_ray(&mut ray_group, data);
+    }
+    ray_group.finish();
 }
 
 fn bench_insert_rtree(
@@ -137,6 +229,38 @@ fn bench_query_quadtree(
     });
 }
 
+fn bench_query_rtree_ray(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_rtree(data);
+    group.bench_function(BenchmarkId::new("rtree", data.spheres.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for ray in &data.rays_3d {
+                hits += tree.query_intersects_generic(ray).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
+fn bench_query_quadtree_ray(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_quadtree(data);
+    group.bench_function(BenchmarkId::new("quadtree", data.spheres.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for ray in &data.rays_2d {
+                hits += tree.intersect_generic(ray).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
 fn build_rtree(data: &BenchData) -> RTree<f32, 3, 16, u32> {
     let mut tree: RTree<f32, 3, 16, u32> = RTree::default();
     for sphere in &data.spheres {
@@ -164,10 +288,13 @@ fn build_data(seed: u64, count: usize) -> BenchData {
     let spheres = build_spheres(seed, count, 2..50);
     let z_range = z_range(&spheres);
     let queries = build_spheres(seed ^ 0x99, 256, 25..100);
+    let (rays_3d, rays_2d) = build_rays(seed ^ 0x55, 256);
 
     BenchData {
         spheres,
         queries,
+        rays_2d,
+        rays_3d,
         z_range,
     }
 }
@@ -237,6 +364,38 @@ fn normalize_z(z: i32, z_range: (i32, i32)) -> f32 {
 
 fn clamp_i32(value: i32) -> i32 {
     value.clamp(SPACE_MIN, SPACE_MAX)
+}
+
+fn build_rays(seed: u64, count: usize) -> (Vec<Ray3>, Vec<Ray2>) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rays_3d = Vec::with_capacity(count);
+    let mut rays_2d = Vec::with_capacity(count);
+
+    for _ in 0..count {
+        let origin = [
+            rng.gen_range(SPACE_MIN..SPACE_MAX) as f32,
+            rng.gen_range(SPACE_MIN..SPACE_MAX) as f32,
+            rng.gen_range(SPACE_MIN..SPACE_MAX) as f32,
+        ];
+        let dir = [
+            random_non_zero_dir(&mut rng) as f32,
+            random_non_zero_dir(&mut rng) as f32,
+            random_non_zero_dir(&mut rng) as f32,
+        ];
+        rays_3d.push(Ray3::new(origin, dir));
+        rays_2d.push(Ray2::new([origin[0], origin[1]], [dir[0], dir[1]]));
+    }
+
+    (rays_3d, rays_2d)
+}
+
+fn random_non_zero_dir(rng: &mut StdRng) -> i32 {
+    loop {
+        let value = rng.gen_range(-100..=100);
+        if value != 0 {
+            return value;
+        }
+    }
 }
 
 criterion_group!(benches, criterion_benchmark);

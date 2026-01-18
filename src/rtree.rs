@@ -8,6 +8,9 @@
 //! tree.insert(1, BoundingBox::from([0.0..=1.0, 2.0..=3.0]));
 //! assert!(!tree.is_empty());
 //! ```
+//!
+//! The tree also supports generic intersection queries using
+//! types that implement `IntersectsWith<BoundingBox<_, _>>`.
 #[allow(dead_code)]
 mod bounding_box;
 mod dimension_type;
