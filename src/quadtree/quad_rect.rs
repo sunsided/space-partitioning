@@ -45,23 +45,23 @@ impl Default for QuadRect {
     }
 }
 
-impl Into<AABB> for QuadRect {
+impl From<QuadRect> for AABB {
     #[inline]
-    fn into(self) -> AABB {
-        AABB::new(self.l, self.t, self.l + self.hx, self.t + self.hy)
+    fn from(val: QuadRect) -> Self {
+        AABB::new(val.l, val.t, val.l + val.hx, val.t + val.hy)
     }
 }
 
-impl Into<CenteredAABB> for QuadRect {
+impl From<QuadRect> for CenteredAABB {
     #[inline]
-    fn into(self) -> CenteredAABB {
-        CenteredAABB::from_ltwh(self.l, self.t, self.hx, self.hy)
+    fn from(val: QuadRect) -> Self {
+        CenteredAABB::from_ltwh(val.l, val.t, val.hx, val.hy)
     }
 }
 
-impl Into<CenteredAABB> for &QuadRect {
+impl From<&QuadRect> for CenteredAABB {
     #[inline]
-    fn into(self) -> CenteredAABB {
-        CenteredAABB::from_ltwh(self.l, self.t, self.hx, self.hy)
+    fn from(val: &QuadRect) -> Self {
+        CenteredAABB::from_ltwh(val.l, val.t, val.hx, val.hy)
     }
 }

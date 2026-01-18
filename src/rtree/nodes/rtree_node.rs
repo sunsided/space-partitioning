@@ -67,6 +67,28 @@ where
     }
 }
 
+impl<T, const N: usize, TNode> Borrow<BoundingBox<T, N>> for ChildPointer<T, N, TNode>
+where
+    T: DimensionType,
+{
+    fn borrow(&self) -> &BoundingBox<T, N> {
+        &self.bb
+    }
+}
+
+impl<T, const N: usize, TNode> HasBoundingBox<T, N> for ChildPointer<T, N, TNode>
+where
+    T: DimensionType,
+{
+    fn contains<B: Borrow<BoundingBox<T, N>>>(&self, other: B) -> bool {
+        self.bb.contains(other)
+    }
+
+    fn to_bb(&self) -> BoundingBox<T, N> {
+        self.bb.clone()
+    }
+}
+
 impl<T, const N: usize, const M: usize, TupleIdentifier> Default
     for RTreeNode<T, N, M, TupleIdentifier>
 where
@@ -145,12 +167,20 @@ where
 
     pub fn to_bb(&self) -> BoundingBox<T, N> {
         match self {
-            Self::Leaf(leaf) => leaf.iter().fold(BoundingBox::default(), |bb, cp| {
-                bb.into_grown(cp.bb.borrow())
-            }),
-            Self::NonLeaf(non_leaf) => non_leaf.iter().fold(BoundingBox::default(), |bb, cp| {
-                bb.into_grown(cp.bb.borrow())
-            }),
+            Self::Leaf(leaf) => {
+                let mut iter = leaf.iter();
+                let Some(first) = iter.next() else {
+                    return BoundingBox::default();
+                };
+                iter.fold(first.bb.clone(), |bb, cp| bb.into_grown(cp.bb.borrow()))
+            }
+            Self::NonLeaf(non_leaf) => {
+                let mut iter = non_leaf.iter();
+                let Some(first) = iter.next() else {
+                    return BoundingBox::default();
+                };
+                iter.fold(first.bb.clone(), |bb, cp| bb.into_grown(cp.bb.borrow()))
+            }
         }
     }
 

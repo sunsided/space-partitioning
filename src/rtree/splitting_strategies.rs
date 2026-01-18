@@ -3,10 +3,9 @@ use arrayvec::ArrayVec;
 
 pub mod linear_cost_split;
 use crate::rtree::bounding_box::BoundingBox;
-pub use linear_cost_split::LinearCostSplitting;
 
 pub(crate) mod prelude {
-    pub(crate) use super::SplittingStrategy;
+    
 }
 
 /// Trait for strategies used to split overfull nodes.

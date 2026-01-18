@@ -14,7 +14,7 @@ where
     T: DimensionType,
 {
     const MAX_FILL: usize = M;
-    const MIN_FILL: usize = (M + 1) / 2;
+    const MIN_FILL: usize = M.div_ceil(2);
 
     /// Determines if this is full (including overfull).
     #[inline]
@@ -31,7 +31,6 @@ where
     }
 
     /// Determines if this node is a leaf.
-    #[inline]
     fn is_leaf(&self) -> bool;
 
     /// Returns the number of elements in this leaf node.
@@ -68,7 +67,12 @@ where
     }
 
     fn to_bb(&self) -> BoundingBox<T, N> {
-        self.iter().fold(BoundingBox::default(), |bb, other| {
+        let mut iter = self.iter();
+        let Some(first) = iter.next() else {
+            return BoundingBox::default();
+        };
+
+        iter.fold(first.borrow().clone(), |bb, other| {
             bb.into_grown(other.borrow())
         })
     }

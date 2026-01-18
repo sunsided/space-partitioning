@@ -23,7 +23,7 @@ where
 
 /// An index record entry that is stored in a leaf node of the tree.
 #[derive(Debug, Default)]
-pub(crate) struct IndexRecordEntry<T, const N: usize, TupleIdentifier>
+pub struct IndexRecordEntry<T, const N: usize, TupleIdentifier>
 where
     T: DimensionType,
 {
@@ -111,7 +111,7 @@ where
             return false;
         }
         self.entries.push(entry);
-        return true;
+        true
     }
 }
 
@@ -129,9 +129,12 @@ where
 
     /// Builds a bounding box that minimally spans all elements.
     fn to_bb(&self) -> BoundingBox<T, N> {
-        self.entries
-            .iter()
-            .fold(BoundingBox::default(), |mbb, x| mbb.into_grown(&x.bb))
+        let mut iter = self.entries.iter();
+        let Some(first) = iter.next() else {
+            return BoundingBox::default();
+        };
+
+        iter.fold(first.bb.clone(), |mbb, x| mbb.into_grown(&x.bb))
     }
 }
 

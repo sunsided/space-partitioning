@@ -1,7 +1,6 @@
 use crate::rtree::bounding_box::{BoundingBox, BoxAndArea};
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::nodes::node_traits::HasBoundingBox;
-use crate::rtree::nodes::prelude::Node;
 use crate::rtree::splitting_strategies::{SplitGroup, SplitResult, SplittingStrategy};
 use arrayvec::ArrayVec;
 
@@ -24,7 +23,7 @@ where
         let area = area.clone().into_grown(new_entry.to_bb());
 
         // Find the best candidates and remove them from the set.
-        let (best_a, best_b) = linear_pick_seeds(&existing_entries, &new_entry, &area);
+        let (best_a, best_b) = linear_pick_seeds(existing_entries, &new_entry, &area);
 
         let (best_a, best_b) = match (best_a, best_b) {
             (None, None) => unreachable!(),
@@ -52,8 +51,27 @@ where
         group_a.push(best_a);
         group_b.push(best_b);
 
-        // TODO: If one group has so few entries that the rest must be assigned for it to have the minimum number of elements, assign the rest and stop.
-        while let Some(item) = existing_entries.pop() {
+        let min_fill = M.div_ceil(2);
+        while !existing_entries.is_empty() {
+            if group_a.len() + existing_entries.len() == min_fill {
+                while let Some(item) = existing_entries.pop() {
+                    box_a = box_a.get_grown(item.to_bb()).bb;
+                    group_a.push(item);
+                }
+                break;
+            }
+
+            if group_b.len() + existing_entries.len() == min_fill {
+                while let Some(item) = existing_entries.pop() {
+                    box_b = box_b.get_grown(item.to_bb()).bb;
+                    group_b.push(item);
+                }
+                break;
+            }
+
+            let item = existing_entries
+                .pop()
+                .expect("checked non-empty before popping");
             let a_grown = box_a.get_grown(item.to_bb());
             let b_grown = box_b.get_grown(item.to_bb());
 
@@ -107,8 +125,8 @@ where
     let mut highest_lows = [(T::min_value(), None); N];
     let mut lowest_highs = [(T::max_value(), None); N];
 
-    for item_idx in 0..entries.len() {
-        let bb = entries[item_idx].to_bb();
+    for (item_idx, entry) in entries.iter().enumerate() {
+        let bb = entry.to_bb();
         for dim in 0..N {
             let extent = bb.dims[dim];
 
@@ -208,7 +226,7 @@ fn decide_group<T: DimensionType, const N: usize>(
         return Decision::Left;
     }
 
-    return Decision::Right;
+    Decision::Right
 }
 
 #[cfg(test)]
@@ -240,5 +258,31 @@ mod test {
         // Group a contains both vertical items.
         debug_assert!(result.second.entries.iter().any(|x| x.id == 1));
         debug_assert!(result.second.entries.iter().any(|x| x.id == 2));
+    }
+
+    #[test]
+    fn split_enforces_min_fill() {
+        let mut existing_entries = ArrayVec::from([
+            IndexRecordEntry::new(0, [0.0..=1.0, 0.0..=1.0]),
+            IndexRecordEntry::new(1, [100.0..=101.0, 0.0..=1.0]),
+            IndexRecordEntry::new(2, [98.0..=99.0, 0.0..=1.0]),
+            IndexRecordEntry::new(3, [97.0..=98.0, 0.0..=1.0]),
+        ]);
+
+        let new_entry = IndexRecordEntry::new(4, [96.0..=97.0, 0.0..=1.0]);
+
+        let strategy = LinearCostSplitting {};
+        let result: SplitResult<_, _, 2, 4> = strategy.split(
+            &existing_entries.as_slice().to_bb(),
+            &mut existing_entries,
+            new_entry,
+        );
+
+        assert!(result.first.entries.len() >= 2);
+        assert!(result.second.entries.len() >= 2);
+        assert_eq!(
+            result.first.entries.len() + result.second.entries.len(),
+            5
+        );
     }
 }

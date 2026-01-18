@@ -103,11 +103,11 @@ where
     /// assert_eq!(tree.len(), 1);
     /// ```
     pub fn len(&self) -> usize {
-        return if let Some(node) = &self.root {
+        if let Some(node) = &self.root {
             node.len()
         } else {
             0
-        };
+        }
     }
 
     /// Returns whether the tree is empty, i.e., whether it has no elements.
@@ -183,7 +183,7 @@ where
     ///
     /// assert!(iter.next().is_none());
     /// ```
-    pub fn iter_inorder(&self) -> InorderIterator<T, D> {
+    pub fn iter_inorder(&self) -> InorderIterator<'_, T, D> {
         if let Some(node) = &self.root {
             InorderIterator::new(node)
         } else {

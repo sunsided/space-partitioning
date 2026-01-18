@@ -50,9 +50,7 @@ where
     type Item = &'a IntervalTreeEntry<T, D>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.root.is_none() {
-            return None;
-        }
+        self.root?;
 
         let root = self.root.unwrap();
 
@@ -107,7 +105,7 @@ where
         }
 
         let size = self.root.unwrap().len();
-        return (size, Some(size));
+        (size, Some(size))
     }
 
     fn count(self) -> usize
@@ -122,9 +120,7 @@ where
     }
 
     fn last(self) -> Option<Self::Item> {
-        if self.root.is_none() {
-            return None;
-        }
+        self.root?;
 
         let mut token = self.root.unwrap();
 
@@ -158,11 +154,11 @@ where
                 return;
             }
 
-            inorder(&node.as_ref().unwrap(), f);
+            inorder(node.as_ref().unwrap(), f);
         }
 
         if let Some(root) = self.root {
-            inorder(&root, &mut f);
+            inorder(root, &mut f);
         }
     }
 }

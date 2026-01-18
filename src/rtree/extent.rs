@@ -38,8 +38,8 @@ where
         let range = range.borrow();
         debug_assert!(range.start() <= range.end());
         Self {
-            start: range.start().clone(),
-            end: range.end().clone(),
+            start: *range.start(),
+            end: *range.end(),
         }
     }
 
@@ -98,12 +98,12 @@ where
     }
 }
 
-impl<T> Into<RangeInclusive<T>> for Extent<T>
+impl<T> From<Extent<T>> for RangeInclusive<T>
 where
     T: DimensionType,
 {
-    fn into(self) -> RangeInclusive<T> {
-        self.start..=self.end
+    fn from(val: Extent<T>) -> Self {
+        val.start..=val.end
     }
 }
 

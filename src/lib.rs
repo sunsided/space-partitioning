@@ -7,3 +7,4 @@ pub mod rtree;
 
 pub use interval_tree::IntervalTree;
 pub use quadtree::QuadTree;
+pub use rtree::{BoundingBox, DefaultTupleId, DimensionType, Extent, RTree, RTreeEntry};

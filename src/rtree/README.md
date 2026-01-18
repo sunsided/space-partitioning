@@ -1,5 +1,15 @@
 # R-Tree
 
+## Quick start
+
+```rust
+use space_partitioning::rtree::{BoundingBox, RTree};
+
+let mut tree: RTree<f32, 2, 4> = RTree::default();
+tree.insert(1, BoundingBox::from([0.0..=1.0, 2.0..=3.0]));
+assert!(!tree.is_empty());
+```
+
 - [Basics of R Tree](https://iq.opengenus.org/r-tree/)
 - [R-Tree](https://www.wisdomjobs.com/e-university/data-structures-tutorial-290/r-tree-7279.html)
   - References _Sort-Tile-Recursive_, _Packed Hilbert R-Tree_, _Nearest-X_ bulk-loading

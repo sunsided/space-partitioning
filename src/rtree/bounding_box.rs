@@ -1,6 +1,5 @@
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::extent::{Contains, Extent};
-pub use num_traits::Num;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::mem::MaybeUninit;
@@ -44,7 +43,7 @@ where
         // mem::transmute() doesn't work due to the generic T.
         let data = unsafe { data.as_ptr().cast::<[Extent<T>; N]>().read() };
 
-        return BoundingBox::new(data);
+        BoundingBox::new(data)
     }
 
     /// Gets the number of dimensions of the bounding box.
@@ -53,7 +52,13 @@ where
     /// by the generic parameter `N`.
     #[inline]
     pub fn len(&self) -> usize {
-        return N;
+        N
+    }
+
+    /// Returns whether this box has zero dimensions.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        N == 0
     }
 
     /// Tests whether this box fully contains another one.
@@ -71,7 +76,7 @@ where
     pub fn grow<B: Borrow<BoundingBox<T, N>>>(&mut self, other: B) {
         let other = other.borrow();
         for d in 0..N {
-            self.dims[d].grow(&other.dims[d]);
+            self.dims[d].grow(other.dims[d]);
         }
     }
 
@@ -80,7 +85,7 @@ where
     pub fn into_grown<B: Borrow<BoundingBox<T, N>>>(mut self, other: B) -> BoundingBox<T, N> {
         let other = other.borrow();
         for d in 0..N {
-            self.dims[d].grow(&other.dims[d]);
+            self.dims[d].grow(other.dims[d]);
         }
         self
     }
@@ -108,7 +113,7 @@ where
         let mut new = self.clone();
         let mut area = T::one();
         for d in 0..N {
-            new.dims[d].grow(&other.dims[d]);
+            new.dims[d].grow(other.dims[d]);
             area = area * new.dims[d].len()
         }
         BoxAndArea {

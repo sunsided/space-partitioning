@@ -141,8 +141,8 @@ where
     }
 
     /// Iterates the tree in-order, i.e. earlier-starting intervals first.
-    pub(crate) fn iter_inorder(&self) -> InorderIterator<T, D> {
-        InorderIterator::new(&self)
+    pub(crate) fn iter_inorder(&self) -> InorderIterator<'_, T, D> {
+        InorderIterator::new(self)
     }
 }
 
@@ -169,15 +169,15 @@ where
             let entry: IntervalTreeEntry<T, D> = into_entry.into();
 
             let new_node = IntervalTreeNode::from(entry);
-            if root.is_some() {
-                root.as_mut().unwrap().insert(new_node);
+            if let Some(root_node) = root.as_mut() {
+                root_node.insert(new_node);
             } else {
-                root = Some(new_node)
+                root = Some(new_node);
             }
         }
 
-        if root.is_some() {
-            IntervalTreeNodeOption::Some(root.unwrap())
+        if let Some(root) = root {
+            IntervalTreeNodeOption::Some(root)
         } else {
             IntervalTreeNodeOption::None
         }

@@ -65,10 +65,6 @@ impl<ElementId> QuadTree<ElementId>
 where
     ElementId: ElementIdType,
 {
-    pub fn default() -> Self {
-        Self::new(QuadRect::default(), 8, 16, 1)
-    }
-
     pub fn new(
         root_rect: QuadRect,
         max_depth: u8,
@@ -234,7 +230,7 @@ where
         // If an element covers more than one child node, we store it separately.
         let covers_many = (insert_top & insert_bottom) | (insert_left & insert_right);
         if covers_many {
-            self.insert_element_in_child_node(first_child_index + 0, element_index);
+            self.insert_element_in_child_node(first_child_index, element_index);
             return;
         }
 
@@ -384,7 +380,7 @@ where
         let mut to_process = NodeList::default();
         to_process.push_back(root);
 
-        while to_process.len() > 0 {
+        while !to_process.is_empty() {
             let nd = to_process.pop_back();
 
             // If this node is a leaf, insert it to the list.
@@ -410,7 +406,7 @@ where
         let mut to_process = NodeList::default();
         to_process.push_back(root);
 
-        while to_process.len() > 0 {
+        while !to_process.is_empty() {
             let nd = to_process.pop_back();
 
             // If this node is a leaf, insert it to the list.
@@ -441,7 +437,7 @@ where
         let mut to_process = NodeList::default();
         to_process.push_back(self.get_root_node_data());
 
-        while to_process.len() > 0 {
+        while !to_process.is_empty() {
             let nd = to_process.pop_back();
 
             // If the index is divisible by 5, this node is referring to the
@@ -541,7 +537,7 @@ where
             if quadrants.at(offset) {
                 to_process.push_back(NodeData::new(
                     split_quadrants[offset as usize],
-                    first_child_id + offset as u32,
+                    first_child_id + offset,
                     child_depth,
                     true,
                 ));
@@ -551,7 +547,7 @@ where
         // In intersection tests we always need to explore the self node.
         to_process.push_back(NodeData::new(
             split_quadrants[0],
-            first_child_id + 0,
+            first_child_id,
             // The "this" node is at the same depth and cannot split.
             depth,
             false,
@@ -744,7 +740,7 @@ where
 
             // Depending on the size of the quadrant, the candidate element
             // might still not be covered by the search rectangle.
-            if element.intersects_with(&elem_rect) {
+            if element.intersects_with(elem_rect) {
                 let elem_id = *unsafe { self.element_ids.at(elem_node.element_idx) };
                 candidate_fn(elem_id);
             }
@@ -758,6 +754,15 @@ where
     pub(crate) fn collect_ids(&self) -> Vec<ElementId> {
         let aabb: AABB = self.root_rect.into();
         self.intersect_aabb(&aabb)
+    }
+}
+
+impl<ElementId> Default for QuadTree<ElementId>
+where
+    ElementId: ElementIdType,
+{
+    fn default() -> Self {
+        Self::new(QuadRect::default(), 8, 16, 1)
     }
 }
 

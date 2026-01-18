@@ -40,3 +40,4 @@ rand = "0.8.4"
 piston_window = "0.120.0"
 criterion = "0.3.4"
 indicatif = "0.16.2"
+console = { version = "0.16.2", features = ["std"] }

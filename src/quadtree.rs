@@ -9,6 +9,7 @@ mod node_list;
 mod point;
 mod quad_rect;
 mod quadrants;
+#[allow(clippy::module_inception)]
 mod quadtree;
 mod quadtree_element;
 
