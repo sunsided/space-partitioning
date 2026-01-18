@@ -44,22 +44,22 @@ Notes
 ### 3) Node storage and MBB correctness
 - [x] Fix MBB accumulation so empty nodes don’t include the origin by default.
 - [x] Ensure MBBs update correctly on insert and split for both leaf and non-leaf nodes.
-- [ ] Add helpers for recomputing MBBs from child entries.
+- [x] Add helpers for recomputing MBBs from child entries.
 
 ### 4) Splitting strategy correctness
 - [x] Enforce min-fill during linear-cost split (assign remaining entries when forced).
-- [ ] Validate separation calculation and normalization logic.
+- [x] Validate separation calculation and normalization logic.
 - [x] Add tests that verify split groups and min-fill guarantees.
 
 ### 5) Query support (initial)
-- [ ] Define intersection/containment query API.
-- [ ] Implement tree traversal for queries using MBB pruning.
-- [ ] Add tests for query correctness.
+- [x] Define intersection/containment query API.
+- [x] Implement tree traversal for queries using MBB pruning.
+- [x] Add tests for query correctness.
 
 ### 6) Testing & examples
-- [ ] Replace `todo!()` tests with real assertions.
-- [ ] Add basic integration tests for insert/query behavior.
-- [ ] Add a small example in `examples/rtree.rs` (or similar).
+- [x] Replace `todo!()` tests with real assertions. (none found)
+- [x] Add basic integration tests for insert/query behavior.
+- [x] Add a small example in `examples/rtree.rs` (or similar).
 
 Suggestions
 - Add tests for choose-leaf tie-breakers (equal enlargement, smaller area).
@@ -69,6 +69,7 @@ Suggestions
 - Add property-style tests for splitting (all entries preserved, MBBs are tight, min-fill honored).
 
 ### 7) Follow-up extensions (optional)
-- [ ] Deletion with underflow handling and reinsertion.
-- [ ] Bulk-loading variants (STR, Hilbert).
-- [ ] Nearest-neighbor search.
+- [x] Deletion with underflow handling and reinsertion.
+- [x] Bulk-loading variants (STR, Hilbert).
+- [x] Nearest-neighbor search.
+- [x] Benchmarks for insert/query/delete/bulk-load/nearest-neighbor.

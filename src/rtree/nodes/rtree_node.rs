@@ -76,6 +76,17 @@ where
     }
 }
 
+impl<T, const N: usize, TNode> ChildPointer<T, N, TNode>
+where
+    T: DimensionType,
+    TNode: HasBoundingBox<T, N>,
+{
+    #[inline]
+    pub fn recompute_bb(&mut self) {
+        self.bb = self.pointer.to_bb();
+    }
+}
+
 impl<T, const N: usize, TNode> HasBoundingBox<T, N> for ChildPointer<T, N, TNode>
 where
     T: DimensionType,

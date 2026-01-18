@@ -1,3 +1,4 @@
+use crate::intersections::IntersectsWith;
 use crate::rtree::dimension_type::DimensionType;
 use crate::rtree::extent::{Contains, Extent};
 use std::borrow::Borrow;
@@ -72,6 +73,17 @@ where
         true
     }
 
+    /// Tests whether this box intersects another one.
+    pub fn intersects<B: Borrow<BoundingBox<T, N>>>(&self, other: B) -> bool {
+        let other = other.borrow();
+        for i in 0..N {
+            if self.dims[i].end < other.dims[i].start || other.dims[i].end < self.dims[i].start {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Grows this bounding box of this node to tightly fit all elements.
     pub fn grow<B: Borrow<BoundingBox<T, N>>>(&mut self, other: B) {
         let other = other.borrow();
@@ -122,6 +134,24 @@ where
             area_increase: area - self.area(),
         }
     }
+
+    pub(crate) fn distance2_to_point(&self, point: &[T; N]) -> T {
+        let mut dist = T::zero();
+        for i in 0..N {
+            let start = self.dims[i].start;
+            let end = self.dims[i].end;
+            let p = point[i];
+            let delta = if p < start {
+                start - p
+            } else if p > end {
+                p - end
+            } else {
+                T::zero()
+            };
+            dist = dist + delta * delta;
+        }
+        dist
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -141,6 +171,15 @@ where
     fn default() -> Self {
         debug_assert_ne!(N, 0);
         BoundingBox::new([Extent::default(); N])
+    }
+}
+
+impl<T, const N: usize> IntersectsWith<BoundingBox<T, N>> for BoundingBox<T, N>
+where
+    T: DimensionType,
+{
+    fn intersects_with(&self, other: &BoundingBox<T, N>) -> bool {
+        self.intersects(other)
     }
 }
 

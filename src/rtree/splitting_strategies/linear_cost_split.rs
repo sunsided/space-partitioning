@@ -162,7 +162,7 @@ where
         }
     }
 
-    let mut highest_separation = T::min_value();
+    let mut highest_normalized = T::min_value();
     let (mut best_a, mut best_b) = (None, None);
 
     for dim in 0..N {
@@ -177,15 +177,28 @@ where
         let sep_b = hi_lo - lo_hi;
         let separation = if sep_a > sep_b { sep_a } else { sep_b };
 
-        let normalized_separation = separation / width;
-        if normalized_separation > highest_separation {
-            highest_separation = separation;
+        let normalized_separation = if width == T::zero() {
+            T::zero()
+        } else {
+            separation / width
+        };
+        if normalized_separation > highest_normalized {
+            highest_normalized = normalized_separation;
             best_a = lowest_highs[dim].1;
             best_b = highest_lows[dim].1;
         }
     }
 
-    debug_assert_ne!(best_a, best_b);
+    if best_a == best_b {
+        if best_a.is_some() {
+            // Fall back to using the new entry as a distinct seed.
+            best_b = None;
+        } else {
+            // If both are the new entry (degenerate case), pick any two existing entries.
+            best_a = Some(0);
+            best_b = Some(1);
+        }
+    }
     let low_idx = best_a.min(best_b);
     let high_idx = best_a.max(best_b);
     (low_idx, high_idx)
@@ -280,6 +293,30 @@ mod test {
 
         assert!(result.first.entries.len() >= 2);
         assert!(result.second.entries.len() >= 2);
+        assert_eq!(
+            result.first.entries.len() + result.second.entries.len(),
+            5
+        );
+    }
+
+    #[test]
+    fn split_handles_zero_width_dimension() {
+        let mut existing_entries = ArrayVec::from([
+            IndexRecordEntry::new(0, [0..=0, 0..=1]),
+            IndexRecordEntry::new(1, [0..=0, 10..=11]),
+            IndexRecordEntry::new(2, [0..=0, 20..=21]),
+            IndexRecordEntry::new(3, [0..=0, 30..=31]),
+        ]);
+
+        let new_entry = IndexRecordEntry::new(4, [0..=0, 40..=41]);
+
+        let strategy = LinearCostSplitting {};
+        let result: SplitResult<_, _, 2, 4> = strategy.split(
+            &existing_entries.as_slice().to_bb(),
+            &mut existing_entries,
+            new_entry,
+        );
+
         assert_eq!(
             result.first.entries.len() + result.second.entries.len(),
             5

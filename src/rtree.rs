@@ -25,6 +25,7 @@ pub use bounding_box::BoundingBox;
 pub use dimension_type::DimensionType;
 pub use extent::Extent;
 pub use rtree::RTree;
+pub use crate::rtree::rtree::BulkLoadStrategy;
 pub use crate::rtree::nodes::rtree_leaf::IndexRecordEntry as RTreeEntry;
 
 /// Default tuple identifier type used by [`RTree`].
