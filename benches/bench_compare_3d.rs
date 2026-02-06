@@ -2,9 +2,10 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Benchmark
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use space_partitioning::intersections::IntersectsWith;
+use space_partitioning::octree::{OctRect, OctTreeElement, AABB as AABB3};
 use space_partitioning::quadtree::{QuadRect, QuadTreeElement, AABB};
 use space_partitioning::rtree::{BoundingBox, RTree};
-use space_partitioning::QuadTree;
+use space_partitioning::{OctTree, QuadTree};
 
 const SPACE_MIN: i32 = 0;
 const SPACE_MAX: i32 = 1000;
@@ -12,6 +13,9 @@ const QUADTREE_DEPTH: u8 = 8;
 const QUADTREE_BUCKET: u32 = 16;
 const QUADTREE_MIN_CELL: u32 = 1;
 const Z_WEIGHT: f32 = 0.75;
+const OCTREE_DEPTH: u8 = 8;
+const OCTREE_BUCKET: u32 = 16;
+const OCTREE_MIN_CELL: u32 = 1;
 
 #[derive(Clone, Copy, Debug)]
 struct Sphere {
@@ -102,6 +106,33 @@ impl IntersectsWith<BoundingBox<f32, 3>> for Ray3 {
     }
 }
 
+impl IntersectsWith<AABB3> for Ray3 {
+    fn intersects_with(&self, other: &AABB3) -> bool {
+        let mut tmin = f32::NEG_INFINITY;
+        let mut tmax = f32::INFINITY;
+
+        let bounds = [
+            (other.min.x as f32, other.max.x as f32),
+            (other.min.y as f32, other.max.y as f32),
+            (other.min.z as f32, other.max.z as f32),
+        ];
+
+        for axis in 0..3 {
+            let t1 = (bounds[axis].0 - self.origin[axis]) * self.inv_dir[axis];
+            let t2 = (bounds[axis].1 - self.origin[axis]) * self.inv_dir[axis];
+            let (t1, t2) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+            tmin = tmin.max(t1);
+            tmax = tmax.min(t2);
+            if tmin > tmax {
+                return false;
+            }
+        }
+
+        tmax >= 0.0
+    }
+}
+
 struct BenchData {
     spheres: Vec<Sphere>,
     queries: Vec<Sphere>,
@@ -122,6 +153,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     for data in &datasets {
         bench_insert_rtree(&mut insert_group, data);
         bench_insert_quadtree(&mut insert_group, data);
+        bench_insert_octree(&mut insert_group, data);
     }
     insert_group.finish();
 
@@ -129,6 +161,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     for data in &datasets {
         bench_query_rtree(&mut query_group, data);
         bench_query_quadtree(&mut query_group, data);
+        bench_query_octree(&mut query_group, data);
     }
     query_group.finish();
 
@@ -136,6 +169,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     for data in &datasets {
         bench_query_rtree_ray(&mut ray_group, data);
         bench_query_quadtree_ray(&mut ray_group, data);
+        bench_query_octree_ray(&mut ray_group, data);
     }
     ray_group.finish();
 }
@@ -194,6 +228,35 @@ fn bench_insert_quadtree(
     );
 }
 
+fn bench_insert_octree(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let bounds = OctRect::new(
+        SPACE_MIN, SPACE_MIN, SPACE_MIN, SPACE_MAX, SPACE_MAX, SPACE_MAX,
+    );
+    group.bench_with_input(
+        BenchmarkId::new("octree", data.spheres.len()),
+        &data.spheres,
+        |b, spheres| {
+            b.iter_batched(
+                || spheres.clone(),
+                |spheres| {
+                    let mut tree =
+                        OctTree::new(bounds, OCTREE_DEPTH, OCTREE_BUCKET, OCTREE_MIN_CELL);
+                    for sphere in spheres {
+                        let aabb = sphere_to_octree_aabb(sphere);
+                        tree.insert(OctTreeElement::new(sphere.id, aabb))
+                            .expect("insert should work");
+                    }
+                    black_box(tree);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
+}
+
 fn bench_query_rtree(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     data: &BenchData,
@@ -220,6 +283,23 @@ fn bench_query_quadtree(
             let mut hits = 0usize;
             for query in &data.queries {
                 let aabb = sphere_to_quadtree_aabb(*query, data.z_range);
+                hits += tree.intersect_aabb(&aabb).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
+fn bench_query_octree(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_octree(data);
+    group.bench_function(BenchmarkId::new("octree", data.spheres.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for query in &data.queries {
+                let aabb = sphere_to_octree_aabb(*query);
                 hits += tree.intersect_aabb(&aabb).len();
             }
             black_box(hits);
@@ -259,6 +339,22 @@ fn bench_query_quadtree_ray(
     });
 }
 
+fn bench_query_octree_ray(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    data: &BenchData,
+) {
+    let tree = build_octree(data);
+    group.bench_function(BenchmarkId::new("octree", data.spheres.len()), |b| {
+        b.iter(|| {
+            let mut hits = 0usize;
+            for ray in &data.rays_3d {
+                hits += tree.intersect_generic(ray).len();
+            }
+            black_box(hits);
+        });
+    });
+}
+
 fn build_rtree(data: &BenchData) -> RTree<f32, 3, 16, u32> {
     let mut tree: RTree<f32, 3, 16, u32> = RTree::default();
     for sphere in &data.spheres {
@@ -277,6 +373,23 @@ fn build_quadtree(data: &BenchData) -> QuadTree {
     for sphere in &data.spheres {
         let aabb = sphere_to_quadtree_aabb(*sphere, data.z_range);
         tree.insert(QuadTreeElement::new(sphere.id, aabb))
+            .expect("insert should work");
+    }
+    tree
+}
+
+fn build_octree(data: &BenchData) -> OctTree {
+    let mut tree = OctTree::new(
+        OctRect::new(
+            SPACE_MIN, SPACE_MIN, SPACE_MIN, SPACE_MAX, SPACE_MAX, SPACE_MAX,
+        ),
+        OCTREE_DEPTH,
+        OCTREE_BUCKET,
+        OCTREE_MIN_CELL,
+    );
+    for sphere in &data.spheres {
+        let aabb = sphere_to_octree_aabb(*sphere);
+        tree.insert(OctTreeElement::new(sphere.id, aabb))
             .expect("insert should work");
     }
     tree
@@ -353,6 +466,18 @@ fn sphere_to_quadtree_aabb(sphere: Sphere, z_range: (i32, i32)) -> AABB {
     let max_y = clamp_i32(sphere.center[1] + radius_scaled);
 
     AABB::new(min_x, min_y, max_x, max_y)
+}
+
+fn sphere_to_octree_aabb(sphere: Sphere) -> AABB3 {
+    let r = sphere.radius;
+    AABB3::new(
+        clamp_i32(sphere.center[0] - r),
+        clamp_i32(sphere.center[1] - r),
+        clamp_i32(sphere.center[2] - r),
+        clamp_i32(sphere.center[0] + r),
+        clamp_i32(sphere.center[1] + r),
+        clamp_i32(sphere.center[2] + r),
+    )
 }
 
 fn normalize_z(z: i32, z_range: (i32, i32)) -> f32 {

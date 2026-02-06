@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Introduced 3D `OctTree` with 3D AABB support and public exports.
+- Added octree unit tests covering insertion, intersection (AABB and generic), ray casting, and cleanup.
+- Extended 3D benchmarks to include OctTree alongside QuadTree and RTree for inserts and queries.
+- Added `RTree` implementation with bounding boxes, ray intersection queries, and comparisons against QuadTree.
+- New tests and benchmarks for RTree, including 2D/3D comparisons and ray-intersection scenarios.
+
 ## 0.5.0 - 2021-08-22
 
 ### Changed
